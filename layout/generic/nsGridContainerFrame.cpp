@@ -7617,6 +7617,17 @@ LogicalSize nsGridContainerFrame::GridReflowInput::PercentageBasisFor(
     return LogicalSize(wm, NS_UNCONSTRAINEDSIZE, NS_UNCONSTRAINEDSIZE);
   }
 
+  if (StaticPrefs::layout_css_grid_multi_pass_track_sizing_enabled()) {
+    const nscoord colSize = mCols.mCanResolveLineRangeSize
+                                ? aGridItem.mArea.mCols.ToLength(mCols.mSizes)
+                                : NS_UNCONSTRAINEDSIZE;
+    const nscoord rowSize = mRows.mCanResolveLineRangeSize
+                                ? aGridItem.mArea.mRows.ToLength(mRows.mSizes)
+                                : NS_UNCONSTRAINEDSIZE;
+    return !wm.IsOrthogonalTo(mWM) ? LogicalSize(wm, colSize, rowSize)
+                                   : LogicalSize(wm, rowSize, colSize);
+  }
+
   if (aAxis == LogicalAxis::Inline || !mCols.mCanResolveLineRangeSize) {
     if (StaticPrefs::layout_css_grid_multi_pass_track_sizing_enabled() &&
         aAxis == LogicalAxis::Inline && mRows.mCanResolveLineRangeSize) {
@@ -9163,12 +9174,6 @@ nscoord nsGridContainerFrame::ComputeBSizeForResolvingRowSizes(
   }
   result = aGridRI.mReflowInput->ApplyMinMaxBSize(result);
 
-  // Reset the track sizing bits before re-resolving the row sizes in Reflow().
-  for (auto& item : aGridRI.mGridItems) {
-    item.ResetTrackSizingBits(LogicalAxis::Block);
-  }
-  aGridRI.mRows.mCanResolveLineRangeSize = false;
-
   return result;
 }
 
@@ -9299,6 +9304,23 @@ void nsGridContainerFrame::Reflow(nsPresContext* aPresContext,
 
     const nscoord bSizeForResolvingRowSizes = ComputeBSizeForResolvingRowSizes(
         gridRI, grid, computedBSize, containIntrinsicBSize);
+
+    if (StaticPrefs::layout_css_grid_multi_pass_track_sizing_enabled()) {
+      // Reset the track sizing bits before re-resolving the column sizes.
+      for (auto& item : gridRI.mGridItems) {
+        item.ResetTrackSizingBits(LogicalAxis::Inline);
+      }
+      gridRI.mCols.mCanResolveLineRangeSize = false;
+
+      gridRI.CalculateTrackSizesForAxis(LogicalAxis::Inline, grid,
+                                        NS_UNCONSTRAINEDSIZE,
+                                        SizingConstraint::NoConstraint);
+      // Reset the track sizing bits before re-resolving the row sizes.
+      for (auto& item : gridRI.mGridItems) {
+        item.ResetTrackSizingBits(LogicalAxis::Block);
+      }
+      gridRI.mRows.mCanResolveLineRangeSize = false;
+    }
 
     // Resolve the row sizes with the determined bSizeForResolvingRowSizes.
     gridRI.CalculateTrackSizesForAxis(LogicalAxis::Block, grid,
