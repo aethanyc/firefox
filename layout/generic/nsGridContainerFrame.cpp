@@ -4163,6 +4163,8 @@ void nsGridContainerFrame::UsedTrackSizes::ResolveSubgridTrackSizesForAxis(
 void nsGridContainerFrame::GridReflowInput::CalculateTrackSizesForAxis(
     LogicalAxis aAxis, const Grid& aGrid, nscoord aContentBoxSize,
     SizingConstraint aConstraint) {
+  // printf("CalculateTrackSizesForAxis: calculate %s\n",
+  //        aAxis == LogicalAxis::Inline ? "columns" : "rows");
   auto& tracks = aAxis == LogicalAxis::Inline ? mCols : mRows;
   const auto& sizingFunctions =
       aAxis == LogicalAxis::Inline ? mColFunctions : mRowFunctions;
@@ -9302,8 +9304,20 @@ void nsGridContainerFrame::Reflow(nsPresContext* aPresContext,
     gridRI.CalculateTrackSizesForAxis(LogicalAxis::Inline, grid, computedISize,
                                       SizingConstraint::NoConstraint);
 
+    // gridRI.mCols.Dump();
+
     const nscoord bSizeForResolvingRowSizes = ComputeBSizeForResolvingRowSizes(
         gridRI, grid, computedBSize, containIntrinsicBSize);
+
+    if (StaticPrefs::layout_css_grid_multi_pass_track_sizing_enabled()) {
+      if (computedBSize != NS_UNCONSTRAINEDSIZE) {
+        gridRI.CalculateTrackSizesForAxis(LogicalAxis::Block, grid,
+                                          computedBSize,
+                                          SizingConstraint::NoConstraint);
+      }
+    }
+
+    // gridRI.mRows.Dump();
 
     if (StaticPrefs::layout_css_grid_multi_pass_track_sizing_enabled()) {
       // Reset the track sizing bits before re-resolving the column sizes.
@@ -9313,8 +9327,11 @@ void nsGridContainerFrame::Reflow(nsPresContext* aPresContext,
       gridRI.mCols.mCanResolveLineRangeSize = false;
 
       gridRI.CalculateTrackSizesForAxis(LogicalAxis::Inline, grid,
-                                        NS_UNCONSTRAINEDSIZE,
+                                        computedISize,
                                         SizingConstraint::NoConstraint);
+
+      // gridRI.mCols.Dump();
+
       // Reset the track sizing bits before re-resolving the row sizes.
       for (auto& item : gridRI.mGridItems) {
         item.ResetTrackSizingBits(LogicalAxis::Block);
@@ -9326,6 +9343,8 @@ void nsGridContainerFrame::Reflow(nsPresContext* aPresContext,
     gridRI.CalculateTrackSizesForAxis(LogicalAxis::Block, grid,
                                       bSizeForResolvingRowSizes,
                                       SizingConstraint::NoConstraint);
+
+    // gridRI.mRows.Dump();
 
     NS_ASSERTION(
         !StaticPrefs::layout_css_grid_multi_pass_track_sizing_enabled() ||
