@@ -9186,15 +9186,15 @@ nscoord nsGridContainerFrame::ComputeBSizeForResolvingRowSizes(
     return aGridRI.mReflowInput->ApplyMinMaxBSize(*aContainIntrinsicBSize);
   }
 
-  if (!StaticPrefs::layout_css_grid_multi_pass_track_sizing_enabled()) {
-    // To preserve the legacy track sizing behavior, return an unconstrained
-    // block-size.
-    return NS_UNCONSTRAINEDSIZE;
-  }
-
   if (IsMasonry(LogicalAxis::Block)) {
     // If the block-axis is masonry, we don't need the two-pass row sizes
     // resolution.
+    return NS_UNCONSTRAINEDSIZE;
+  }
+
+  if (!StaticPrefs::layout_css_grid_multi_pass_track_sizing_enabled()) {
+    // To preserve the legacy track sizing behavior, return an unconstrained
+    // block-size.
     return NS_UNCONSTRAINEDSIZE;
   }
 
