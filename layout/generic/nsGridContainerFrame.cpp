@@ -2975,6 +2975,15 @@ struct nsGridContainerFrame::Tracks {
                            WritingMode aWM, nscoord aContentBoxSize,
                            bool aIsSubgridded);
 
+  /**
+   * Return the resolved total track size.
+   *
+   * Note: This method assumes that AlignJustifyContent() might not be called
+   * yet.
+   */
+  nscoord TotalTrackSizeBeforeAlignJusifyContent(
+      const nsGridContainerFrame* aGridContainerFrame) const;
+
   nscoord GridLineEdge(uint32_t aLine, GridLineSide aSide) const {
     if (MOZ_UNLIKELY(mSizes.IsEmpty())) {
       // https://drafts.csswg.org/css-grid-2/#grid-definition
@@ -7584,6 +7593,18 @@ void nsGridContainerFrame::Tracks::AlignJustifyContent(
   MOZ_ASSERT(!roundingError, "we didn't distribute all rounding error?");
 }
 
+nscoord nsGridContainerFrame::Tracks::TotalTrackSizeBeforeAlignJusifyContent(
+    const nsGridContainerFrame* aGridContainerFrame) const {
+  if (aGridContainerFrame->IsSubgrid(mAxis)) {
+    return GridLineEdge(mSizes.Length(), GridLineSide::BeforeGridGap);
+  }
+
+  // This method assumes that AlignJustifyContent() might not be called yet.
+  // Therefore, we can't use GridLineEdge() here, as mPosition may not be
+  // calculated.
+  return SumOfGridTracksAndGaps();
+}
+
 void nsGridContainerFrame::LineRange::ToPositionAndLength(
     const nsTArray<TrackSize>& aTrackSizes, nscoord* aPos,
     nscoord* aLength) const {
@@ -9215,17 +9236,8 @@ nscoord nsGridContainerFrame::ComputeBSizeForResolvingRowSizes(
                                      NS_UNCONSTRAINEDSIZE,
                                      SizingConstraint::NoConstraint);
 
-  nscoord result;
-  if (!IsRowSubgrid()) {
-    // Note: we can't use GridLineEdge here since we haven't calculated the
-    // rows' mPosition yet (happens in a later AlignJustifyContent call in
-    // Reflow()).
-    result = aGridRI.mRows.SumOfGridTracksAndGaps();
-  } else {
-    result = aGridRI.mRows.GridLineEdge(aGridRI.mRows.mSizes.Length(),
-                                        GridLineSide::BeforeGridGap);
-  }
-  result = aGridRI.mReflowInput->ApplyMinMaxBSize(result);
+  const nscoord result = aGridRI.mReflowInput->ApplyMinMaxBSize(
+      aGridRI.mRows.TotalTrackSizeBeforeAlignJusifyContent(this));
 
   // Reset the track sizes before re-resolving the row sizes in Reflow().
   aGridRI.ResetTrackSizesForAxis(LogicalAxis::Block);
@@ -9262,16 +9274,7 @@ nscoord nsGridContainerFrame::ComputeIntrinsicContentBSize(
     return aBSizeForResolvingRowSizes;
   }
 
-  // Use the resolved sizes of our rows.
-  if (!IsRowSubgrid()) {
-    // Note: we can't use GridLineEdge here since we haven't calculated
-    // the rows' mPosition yet (happens in a later AlignJustifyContent call in
-    // Reflow()).
-    return aGridRI.mRows.SumOfGridTracksAndGaps();
-  }
-
-  const uint32_t numRows = aGridRI.mRows.mSizes.Length();
-  return aGridRI.mRows.GridLineEdge(numRows, GridLineSide::BeforeGridGap);
+  return aGridRI.mRows.TotalTrackSizeBeforeAlignJusifyContent(this);
 }
 
 void nsGridContainerFrame::Reflow(nsPresContext* aPresContext,
@@ -10093,11 +10096,7 @@ nscoord nsGridContainerFrame::ComputeIntrinsicISize(
                                       NS_UNCONSTRAINEDSIZE, constraint);
   }
 
-  if (MOZ_LIKELY(!IsSubgrid())) {
-    return gridRI.mCols.SumOfGridTracksAndGaps();
-  }
-  return gridRI.mCols.GridLineEdge(gridRI.mCols.mSizes.Length(),
-                                   GridLineSide::BeforeGridGap);
+  return gridRI.mCols.TotalTrackSizeBeforeAlignJusifyContent(this);
 }
 
 nscoord nsGridContainerFrame::IntrinsicISize(const IntrinsicSizeInput& aInput,
