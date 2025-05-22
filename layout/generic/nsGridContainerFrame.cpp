@@ -2976,12 +2976,13 @@ struct nsGridContainerFrame::Tracks {
                            bool aIsSubgridded);
 
   /**
-   * Return the resolved total track size.
+   * Return the total resolved track size, ignoring any alignment adjustments
+   * that AlignJustifyContent() might apply.
    *
    * Note: This method assumes that AlignJustifyContent() might not be called
    * yet.
    */
-  nscoord TotalTrackSizeBeforeAlignJusifyContent(
+  nscoord TrackSizeWithoutAlignment(
       const nsGridContainerFrame* aGridContainerFrame) const;
 
   nscoord GridLineEdge(uint32_t aLine, GridLineSide aSide) const {
@@ -7593,7 +7594,7 @@ void nsGridContainerFrame::Tracks::AlignJustifyContent(
   MOZ_ASSERT(!roundingError, "we didn't distribute all rounding error?");
 }
 
-nscoord nsGridContainerFrame::Tracks::TotalTrackSizeBeforeAlignJusifyContent(
+nscoord nsGridContainerFrame::Tracks::TrackSizeWithoutAlignment(
     const nsGridContainerFrame* aGridContainerFrame) const {
   if (aGridContainerFrame->IsSubgrid(mAxis)) {
     return GridLineEdge(mSizes.Length(), GridLineSide::BeforeGridGap);
@@ -9274,7 +9275,7 @@ nscoord nsGridContainerFrame::ComputeIntrinsicContentBSize(
     return aBSizeForResolvingRowSizes;
   }
 
-  return aGridRI.mRows.TotalTrackSizeBeforeAlignJusifyContent(this);
+  return aGridRI.mRows.TrackSizeWithoutAlignment(this);
 }
 
 void nsGridContainerFrame::Reflow(nsPresContext* aPresContext,
@@ -10096,7 +10097,7 @@ nscoord nsGridContainerFrame::ComputeIntrinsicISize(
                                       NS_UNCONSTRAINEDSIZE, constraint);
   }
 
-  return gridRI.mCols.TotalTrackSizeBeforeAlignJusifyContent(this);
+  return gridRI.mCols.TrackSizeWithoutAlignment(this);
 }
 
 nscoord nsGridContainerFrame::IntrinsicISize(const IntrinsicSizeInput& aInput,
