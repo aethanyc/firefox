@@ -6043,6 +6043,16 @@ static nscoord ContentContribution(const GridItemInfo& aGridItem,
       // XXXmats deal with percentages better, see bug 1300369 comment 27.
       size -= contentSize - newContentSize;
     }
+    if (aGridRI.mIsGridIntrinsicSizing) {
+      // We may reach here while computing the grid container's min-content
+      // contribution, potentially in the middle of resolving grid row sizes.
+      // Because the child was reflowed with provisional inline constraints,
+      // mark the grid container as having dirty children so its parent (e.g.
+      // the flex container) will reflow the grid container again with its final
+      // sizes. This ensures the child is reflowed again using the grid
+      // container's final inline-size as its inline constraints.
+      aGridRI.mFrame->AddStateBits(NS_FRAME_HAS_DIRTY_CHILDREN);
+    }
   }
   MOZ_ASSERT(aGridItem.mBaselineOffset[aAxis] >= 0,
              "baseline offset should be non-negative at this point");
