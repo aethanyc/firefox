@@ -6033,8 +6033,12 @@ static nscoord ContentContribution(const GridItemInfo& aGridItem,
       iMinSizeClamp = aMinSizeClamp;
     }
     LogicalSize availableSize(childWM, availISize, availBSize);
-    size = ::MeasuringReflow(child, aGridRI.mReflowInput, rc, availableSize,
-                             cbSize, iMinSizeClamp, bMinSizeClamp);
+    if (aGridRI.mIsGridIntrinsicSizing && aAxis == LogicalAxis::Block) {
+      size = 0;
+    } else {
+      size = ::MeasuringReflow(child, aGridRI.mReflowInput, rc, availableSize,
+                               cbSize, iMinSizeClamp, bMinSizeClamp);
+    }
     size += child->GetLogicalUsedMargin(childWM).BStartEnd(childWM);
     nscoord overflow = size - aMinSizeClamp;
     if (MOZ_UNLIKELY(overflow > 0)) {
