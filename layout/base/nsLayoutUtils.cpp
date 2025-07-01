@@ -4823,18 +4823,28 @@ nscoord nsLayoutUtils::IntrinsicForAxis(
                            : NS_UNCONSTRAINEDSIZE;
       nscoord percentageBasisBSizeForChildren;
       if (aFrame->IsBlockContainer()) {
-        // Compute and cache the box-sizing adjustment in contentEdgeToBoxSizing
-        // for later use within this function.
-        contentEdgeToBoxSizing.emplace(GetContentEdgeToBoxSizing(boxSizing));
+        nsIFrame* parent = aFrame->GetParent();
+        const auto blockAxisAlignment =
+            aFrame->StylePosition()->UsedAlignSelf(parent->Style())._0;
+        if (aFrame->IsGridItem() &&
+            percentageBasisBSizeForFrame != NS_UNCONSTRAINEDSIZE &&
+            (blockAxisAlignment == StyleAlignFlags::STRETCH ||
+             blockAxisAlignment == StyleAlignFlags::NORMAL)) {
+          percentageBasisBSizeForChildren = percentageBasisBSizeForFrame;
+        } else {
+          // Compute and cache the box-sizing adjustment in
+          // contentEdgeToBoxSizing for later use within this function.
+          contentEdgeToBoxSizing.emplace(GetContentEdgeToBoxSizing(boxSizing));
 
-        // aFrame is a containing block, so its block size (with min and max
-        // block size constraints applied) serves as the percentage basis for
-        // its children.
-        percentageBasisBSizeForChildren =
-            nsIFrame::ComputeBSizeValueAsPercentageBasis(
-                *styleBSize, *styleMinBSize, *styleMaxBSize,
-                percentageBasisBSizeForFrame,
-                contentEdgeToBoxSizing->BSize(childWM));
+          // aFrame is a containing block, so its block size (with min and max
+          // block size constraints applied) serves as the percentage basis for
+          // its children.
+          percentageBasisBSizeForChildren =
+              nsIFrame::ComputeBSizeValueAsPercentageBasis(
+                  *styleBSize, *styleMinBSize, *styleMaxBSize,
+                  percentageBasisBSizeForFrame,
+                  contentEdgeToBoxSizing->BSize(childWM));
+        }
       } else {
         // aFrame is not a containing block, so its children share the same
         // containing block as aFrame. Therefore, the percentage basis for
