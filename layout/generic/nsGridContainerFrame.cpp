@@ -5904,7 +5904,9 @@ static nscoord ContentContribution(const GridItemInfo& aGridItem,
       // The next two variables are MinSizeClamp values in the child's axes.
       nscoord iMinSizeClamp = NS_MAXSIZE;
       nscoord bMinSizeClamp = NS_MAXSIZE;
-      LogicalSize cbSize(childWM, 0, NS_UNCONSTRAINEDSIZE);
+      LogicalSize cbSize = aPercentageBasis;
+      // GRID_LOG("In ContentContribution: cbSize %s, aPercentageBasis %s",
+      //          ToString(cbSize).c_str(), ToString(aPercentageBasis).c_str());
       // Below, we try to resolve the child's grid-area size in its inline-axis
       // to use as the CB/Available size in the MeasuringReflow that follows.
       if (child->GetParent() != aGridRI.mFrame) {
