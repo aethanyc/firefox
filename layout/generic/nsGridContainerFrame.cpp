@@ -5905,8 +5905,8 @@ static nscoord ContentContribution(const GridItemInfo& aGridItem,
       nscoord iMinSizeClamp = NS_MAXSIZE;
       nscoord bMinSizeClamp = NS_MAXSIZE;
       LogicalSize cbSize = aPercentageBasis;
-      // GRID_LOG("In ContentContribution: cbSize %s, aPercentageBasis %s",
-      //          ToString(cbSize).c_str(), ToString(aPercentageBasis).c_str());
+      GRID_LOG("In ContentContribution: cbSize %s, aPercentageBasis %s",
+               ToString(cbSize).c_str(), ToString(aPercentageBasis).c_str());
       // Below, we try to resolve the child's grid-area size in its inline-axis
       // to use as the CB/Available size in the MeasuringReflow that follows.
       if (child->GetParent() != aGridRI.mFrame) {
@@ -5974,6 +5974,9 @@ static nscoord ContentContribution(const GridItemInfo& aGridItem,
         iMinSizeClamp = aMinSizeClamp;
       }
       LogicalSize availableSize(childWM, availISize, availBSize);
+      GRID_LOG("Call MeasuringReflow to measure %s",
+               aConstraint == IntrinsicISizeType::MinISize ? "min size"
+                                                           : "pref size");
       size = ::MeasuringReflow(child, aGridRI.mReflowInput, rc, availableSize,
                                cbSize, iMinSizeClamp, bMinSizeClamp);
     }
@@ -9460,8 +9463,11 @@ void nsGridContainerFrame::Reflow(nsPresContext* aPresContext,
 
     // Resolve the column sizes with the grid container's inline size.
     // 12.1.1: https://drafts.csswg.org/css-grid-2/#algo-grid-sizing
+    GRID_LOG("Resolve columns");
     gridRI.CalculateTrackSizesForAxis(LogicalAxis::Inline, grid, computedISize,
                                       SizingConstraint::NoConstraint);
+
+    gridRI.mCols.Dump();
 
     nscoord bSizeForResolvingRowSizes = ComputeBSizeForResolvingRowSizes(
         gridRI, computedBSize, containIntrinsicBSize);
@@ -9473,9 +9479,12 @@ void nsGridContainerFrame::Reflow(nsPresContext* aPresContext,
     // percent-valued row sizes to be treated as 'auto', yielding an intrinsic
     // content block-size needed later to *actually* resolve percent-valued row
     // gaps and row sizes.
+    GRID_LOG("Resolve rows");
     gridRI.CalculateTrackSizesForAxis(LogicalAxis::Block, grid,
                                       bSizeForResolvingRowSizes,
                                       SizingConstraint::NoConstraint);
+
+    gridRI.mRows.Dump();
 
     if (StaticPrefs::layout_css_grid_multi_pass_track_sizing_enabled()) {
       // Invalidate the column sizes before re-resolving them.
@@ -9483,9 +9492,11 @@ void nsGridContainerFrame::Reflow(nsPresContext* aPresContext,
 
       // Re-resolve the column sizes.
       // 12.1.3: https://drafts.csswg.org/css-grid-2/#algo-grid-sizing
+      GRID_LOG("Re-resolve columns");
       gridRI.CalculateTrackSizesForAxis(LogicalAxis::Inline, grid,
                                         computedISize,
                                         SizingConstraint::NoConstraint);
+      gridRI.mCols.Dump();
 
       // If our bSizeForResolvingRowSizes is still indefinite, replace it with
       // the sum of the row sizes we just resolved, then re-resolve the row
@@ -9503,11 +9514,13 @@ void nsGridContainerFrame::Reflow(nsPresContext* aPresContext,
         // Invalidate the row sizes before re-resolving them.
         gridRI.InvalidateTrackSizesForAxis(LogicalAxis::Block);
 
+        GRID_LOG("Re-resolve rows");
         // Re-resolve the row sizes.
         // 12.1.4: https://drafts.csswg.org/css-grid-2/#algo-grid-sizing
         gridRI.CalculateTrackSizesForAxis(LogicalAxis::Block, grid,
                                           bSizeForResolvingRowSizes,
                                           SizingConstraint::NoConstraint);
+        gridRI.mRows.Dump();
       }
     }
 
