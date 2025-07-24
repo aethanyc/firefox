@@ -5948,18 +5948,23 @@ static nscoord ContentContribution(const GridItemInfo& aGridItem,
           }
         }
       } else if (aGridRI.mCols.mCanResolveLineRangeSize) {
-        nscoord sz = aGridRI.mCols.ResolveSize(aGridItem.mArea.mCols);
+        MOZ_ASSERT(aGridRI.mCols.ResolveSize(aGridItem.mArea.mCols) ==
+                       cbSize.Size(isOrthogonal ? LogicalAxis::Block
+                                                : LogicalAxis::Inline,
+                                   childWM),
+                   "Resolved column size on the grid area mismatched!");
+        const LogicalAxis inlineAxisInChildWM =
+            isOrthogonal ? LogicalAxis::Block : LogicalAxis::Inline;
+        const nscoord colSize = cbSize.Size(inlineAxisInChildWM, childWM);
         if (isOrthogonal) {
-          availBSize = sz;
-          cbSize.BSize(childWM) = sz;
+          availBSize = colSize;
           if (aGridItem.mState[aAxis] & ItemState::eClampMarginBoxMinSize) {
-            bMinSizeClamp = sz;
+            bMinSizeClamp = colSize;
           }
         } else {
-          availISize = sz;
-          cbSize.ISize(childWM) = sz;
+          availISize = colSize;
           if (aGridItem.mState[aAxis] & ItemState::eClampMarginBoxMinSize) {
-            iMinSizeClamp = sz;
+            iMinSizeClamp = colSize;
           }
         }
       }
