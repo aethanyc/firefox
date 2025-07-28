@@ -435,38 +435,38 @@ enum class GridLineSide {
 
 struct nsGridContainerFrame::TrackSize {
   enum StateBits : uint16_t {
-    // clang-format off
-    eAutoMinSizing =              0x1,
-    eMinContentMinSizing =        0x2,
-    eMaxContentMinSizing =        0x4,
+    eAutoMinSizing = 0x1,
+    eMinContentMinSizing = 0x2,
+    eMaxContentMinSizing = 0x4,
     eMinOrMaxContentMinSizing = eMinContentMinSizing | eMaxContentMinSizing,
     eIntrinsicMinSizing = eMinOrMaxContentMinSizing | eAutoMinSizing,
-    eModified =                   0x8,
-    eAutoMaxSizing =             0x10,
-    eMinContentMaxSizing =       0x20,
-    eMaxContentMaxSizing =       0x40,
+    eModified = 0x8,
+    eAutoMaxSizing = 0x10,
+    eMinContentMaxSizing = 0x20,
+    eMaxContentMaxSizing = 0x40,
     eAutoOrMaxContentMaxSizing = eAutoMaxSizing | eMaxContentMaxSizing,
     eIntrinsicMaxSizing = eAutoOrMaxContentMaxSizing | eMinContentMaxSizing,
-    eFlexMaxSizing =             0x80,
-    eFrozen =                   0x100,
-    eSkipGrowUnlimited1 =       0x200,
-    eSkipGrowUnlimited2 =       0x400,
+    eFlexMaxSizing = 0x80,
+    eFrozen = 0x100,
+    eSkipGrowUnlimited1 = 0x200,
+    eSkipGrowUnlimited2 = 0x400,
     eSkipGrowUnlimited = eSkipGrowUnlimited1 | eSkipGrowUnlimited2,
-    eBreakBefore =              0x800,
+    eBreakBefore = 0x800,
     eApplyFitContentClamping = 0x1000,
-    eInfinitelyGrowable =      0x2000,
+    eInfinitelyGrowable = 0x2000,
+
+    eNeedResolvingTrackSizeAgain = 0x4000,
 
     // These are only used in the masonry axis.  They share the same value
     // as *MinSizing above, but that's OK because we don't use those in
     // the masonry axis.
     //
     // This track corresponds to an item margin-box size that is stretching.
-    eItemStretchSize =            0x1,
+    eItemStretchSize = 0x1,
     // This bit says that we should clamp that size to mLimit.
-    eClampToLimit =               0x2,
+    eClampToLimit = 0x2,
     // This bit says that the corresponding item has `auto` margin(s).
-    eItemHasAutoMargin =          0x4,
-    // clang-format on
+    eItemHasAutoMargin = 0x4,
   };
 
   StateBits Initialize(nscoord aPercentageBasis, const StyleTrackSize&);
@@ -523,6 +523,8 @@ TrackSize::StateBits nsGridContainerFrame::TrackSize::Initialize(
     // 'size' as an additional upper-bound.
     if (!::IsPercentOfIndefiniteSize(aSize.AsFitContent(), aPercentageBasis)) {
       mState = eApplyFitContentClamping;
+    } else {
+      mState |= eNeedResolvingTrackSizeAgain;
     }
     minSizeTag = Tag::Auto;
     maxSizeTag = Tag::MaxContent;
@@ -531,10 +533,14 @@ TrackSize::StateBits nsGridContainerFrame::TrackSize::Initialize(
     // https://drafts.csswg.org/css-grid-2/#valdef-grid-template-columns-length-percentage-0
     // "If the inline or block size of the grid container is indefinite,
     //  <percentage> values relative to that size are treated as 'auto'."
+    GRID_LOG("Indefinite percent min tracking");
+    mState |= eNeedResolvingTrackSizeAgain;
     minSizeTag = Tag::Auto;
   }
   if (::IsPercentOfIndefiniteSize(max, aPercentageBasis)) {
+    GRID_LOG("Indefinite percent max tracking");
     maxSizeTag = Tag::Auto;
+    mState |= eNeedResolvingTrackSizeAgain;
   }
 
   // https://drafts.csswg.org/css-grid-2/#algo-init
@@ -9484,8 +9490,10 @@ void nsGridContainerFrame::Reflow(nsPresContext* aPresContext,
 
     // Resolve the column sizes with the grid container's inline size.
     // 12.1.1: https://drafts.csswg.org/css-grid-2/#algo-grid-sizing
+    GRID_LOG("Resolve columns");
     gridRI.CalculateTrackSizesForAxis(LogicalAxis::Inline, grid, computedISize,
                                       SizingConstraint::NoConstraint);
+    // gridRI.mCols.Dump();
 
     nscoord bSizeForResolvingRowSizes = ComputeBSizeForResolvingRowSizes(
         gridRI, computedBSize, containIntrinsicBSize);
@@ -9497,26 +9505,46 @@ void nsGridContainerFrame::Reflow(nsPresContext* aPresContext,
     // percent-valued row sizes to be treated as 'auto', yielding an intrinsic
     // content block-size needed later to *actually* resolve percent-valued row
     // gaps and row sizes.
+    GRID_LOG("Resolve rows");
     gridRI.CalculateTrackSizesForAxis(LogicalAxis::Block, grid,
                                       bSizeForResolvingRowSizes,
                                       SizingConstraint::NoConstraint);
 
-    if (StaticPrefs::layout_css_grid_multi_pass_track_sizing_enabled()) {
+    // gridRI.mRows.Dump();
+
+    const bool resolveColumnsAgain =
+        std::any_of(gridRI.mGridItems.cbegin(), gridRI.mGridItems.cend(),
+                    [](const GridItemInfo& aItem) {
+                      return aItem.mFrame->HasAnyStateBits(
+                          NS_FRAME_DESCENDANT_INTRINSIC_ISIZE_DEPENDS_ON_BSIZE);
+                    });
+    const bool resolveRowsAgain =
+        (gridRI.mRows.mStateUnion & TrackSize::eNeedResolvingTrackSizeAgain) &&
+        bSizeForResolvingRowSizes == NS_UNCONSTRAINEDSIZE &&
+        !IsMasonry(LogicalAxis::Block);
+
+    GRID_LOG("resolveColumnsAgain %d, resolveRowsAgain %d", resolveColumnsAgain,
+             resolveRowsAgain);
+
+    if (StaticPrefs::layout_css_grid_multi_pass_track_sizing_enabled() &&
+        (resolveColumnsAgain || resolveRowsAgain)) {
       // Invalidate the column sizes before re-resolving them.
       gridRI.InvalidateTrackSizesForAxis(LogicalAxis::Inline);
 
+      GRID_LOG("Re-resolve columns");
       // Re-resolve the column sizes.
       // 12.1.3: https://drafts.csswg.org/css-grid-2/#algo-grid-sizing
       gridRI.CalculateTrackSizesForAxis(LogicalAxis::Inline, grid,
                                         computedISize,
                                         SizingConstraint::NoConstraint);
+      // gridRI.mCols.Dump();
 
       // If our bSizeForResolvingRowSizes is still indefinite, replace it with
       // the sum of the row sizes we just resolved, then re-resolve the row
       // sizes against that value. We skip this for masonry, which doesn't need
       // two-pass row sizes resolution."
-      if (bSizeForResolvingRowSizes == NS_UNCONSTRAINEDSIZE &&
-          !IsMasonry(LogicalAxis::Block)) {
+      // XXX: revise and move this comment to above.
+      if (resolveRowsAgain) {
         bSizeForResolvingRowSizes = gridRI.mReflowInput->ApplyMinMaxBSize(
             gridRI.mRows.TotalTrackSizeWithoutAlignment(this));
 
@@ -9527,11 +9555,13 @@ void nsGridContainerFrame::Reflow(nsPresContext* aPresContext,
         // Invalidate the row sizes before re-resolving them.
         gridRI.InvalidateTrackSizesForAxis(LogicalAxis::Block);
 
+        GRID_LOG("Re-resolve rows");
         // Re-resolve the row sizes.
         // 12.1.4: https://drafts.csswg.org/css-grid-2/#algo-grid-sizing
         gridRI.CalculateTrackSizesForAxis(LogicalAxis::Block, grid,
                                           bSizeForResolvingRowSizes,
                                           SizingConstraint::NoConstraint);
+        // gridRI.mRows.Dump();
       }
     }
 
