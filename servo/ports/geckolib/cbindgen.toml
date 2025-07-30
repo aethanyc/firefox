@@ -271,6 +271,7 @@ include = [
   "SVGPaint",
   "SVGPaintKind",
   "GridTemplateComponent",
+  "TextAutospace",
   "TextEmphasisStyle",
   "TextEmphasisPosition",
   "FontVariantAlternates",
