@@ -10306,6 +10306,11 @@
   value: true
   mirror: always
 
+- name: layout.css.text-autospace.enabled
+  type: bool
+  value: false
+  mirror: always
+
 # Support for the css Zoom property.
 - name: layout.css.zoom.enabled
   type: RelaxedAtomicBool
