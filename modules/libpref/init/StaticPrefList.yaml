@@ -10303,7 +10303,7 @@
 # https://drafts.csswg.org/css-text-4/#text-autospace-property
 - name: layout.css.text-autospace.enabled
   type: bool
-  value: false
+  value: true
   mirror: always
 
 # Support for the css Zoom property.
