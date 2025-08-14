@@ -14,7 +14,6 @@
 
 #include "MathMLTextRunFactory.h"
 #include "PresShellInlines.h"
-#include "TextDrawTarget.h"
 #include "gfx2DGlue.h"
 #include "gfxContext.h"
 #include "gfxUtils.h"
@@ -104,8 +103,6 @@
 using namespace mozilla;
 using namespace mozilla::dom;
 using namespace mozilla::gfx;
-
-typedef mozilla::layout::TextDrawTarget TextDrawTarget;
 
 static bool NeedsToMaskPassword(nsTextFrame* aFrame) {
   MOZ_ASSERT(aFrame);
