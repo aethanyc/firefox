@@ -187,6 +187,11 @@ class nsFontMetrics final {
   nscoord SpaceWidth() const;
 
   /**
+   * Returns the text-autospace width for this font, in app units.
+   */
+  nscoord TextAutospaceWidth() const;
+
+  /**
    * Returns the font associated with these metrics. The return value
    * is only defined after Init() has been called.
    */
