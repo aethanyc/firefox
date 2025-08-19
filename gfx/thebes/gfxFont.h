@@ -1638,6 +1638,7 @@ class gfxFont {
     if (!mVerticalMetrics) {
       CreateVerticalMetrics();
     }
+    printf("ideographicWidth %f\n", (*mVerticalMetrics).ideographicWidth);
     return *mVerticalMetrics;
   }
 

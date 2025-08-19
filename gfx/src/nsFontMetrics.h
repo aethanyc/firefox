@@ -187,6 +187,14 @@ class nsFontMetrics final {
   nscoord SpaceWidth() const;
 
   /**
+   * Returns the text-autospace width for this font, in app units.
+   *
+   * The inter-script spacing is defined as 1/8 of the CJK advance measure, i.e.
+   * 0.125ic: https://drafts.csswg.org/css-text-4/#inter-script-spacing
+   */
+  nscoord TextAutospaceWidth() const;
+
+  /**
    * Returns the font associated with these metrics. The return value
    * is only defined after Init() has been called.
    */

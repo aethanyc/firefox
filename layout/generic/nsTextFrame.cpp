@@ -3339,6 +3339,10 @@ nsTextFrame::PropertyProvider::PropertyProvider(
   if (aAtStartOfLine) {
     mStartOfLineOffset = mStart.GetSkippedOffset();
   }
+
+  auto* fontMetrics = GetFontMetrics();
+  printf("%s: 1/8ic = %d\n", aFrame->ListTag().get(),
+         fontMetrics->TextAutospaceWidth());
 }
 
 nsTextFrame::PropertyProvider::PropertyProvider(
