@@ -223,6 +223,9 @@ class nsTextFrame : public nsIFrame {
 
     void InitFontGroupAndFontMetrics() const;
 
+    // Initialize TextAutospace, if inter-script spacing applies.
+    void InitTextAutospace();
+
     const RefPtr<gfxTextRun> mTextRun;
     mutable gfxFontGroup* mFontGroup;
     mutable RefPtr<nsFontMetrics> mFontMetrics;
@@ -252,6 +255,9 @@ class nsTextFrame : public nsIFrame {
 
     // space for each letter
     const gfxFloat mLetterSpacing;
+
+    // If TextAutospace exists, inter-script spacing applies.
+    Maybe<mozilla::TextAutospace> mTextAutospace;
 
     // min advance for <tab> char
     mutable gfxFloat mMinTabAdvance;

@@ -1980,7 +1980,11 @@ gfx::ShapedTextFlags nsTextFrame::GetSpacingFlags() const {
   // IsDefinitelyZero() is false, in which case we'll return
   // TEXT_ENABLE_SPACING unnecessarily. That's ok because such cases are likely
   // to be rare, and avoiding TEXT_ENABLE_SPACING is just an optimization.
-  bool nonStandardSpacing = !ls.IsDefinitelyZero() || !ws.IsDefinitelyZero();
+  bool nonStandardSpacing =
+      !ls.IsDefinitelyZero() || !ws.IsDefinitelyZero() ||
+      TextAutospace::Enabled(styleText->EffectiveTextAutospace(),
+                             StyleVisibility()->mTextOrientation,
+                             CharacterDataBuffer());
   return nonStandardSpacing ? gfx::ShapedTextFlags::TEXT_ENABLE_SPACING
                             : gfx::ShapedTextFlags();
 }
@@ -3465,6 +3469,7 @@ nsTextFrame::PropertyProvider::PropertyProvider(
   if (aAtStartOfLine) {
     mStartOfLineOffset = mStart.GetSkippedOffset();
   }
+  InitTextAutospace();
 }
 
 nsTextFrame::PropertyProvider::PropertyProvider(
@@ -3491,6 +3496,7 @@ nsTextFrame::PropertyProvider::PropertyProvider(
       mReflowing(false),
       mWhichTextRun(aWhichTextRun) {
   NS_ASSERTION(mTextRun, "Textrun not initialized!");
+  InitTextAutospace();
 }
 
 gfx::ShapedTextFlags nsTextFrame::PropertyProvider::GetShapedTextFlags() const {
@@ -3893,8 +3899,9 @@ void nsTextFrame::PropertyProvider::GetSpacingInternal(Range aRange,
   gfxSkipCharsIterator start(mStart);
   start.SetSkippedOffset(aRange.start);
 
-  // First, compute the word and letter spacing
-  if (mWordSpacing || mLetterSpacing) {
+  // First, compute the word spacing, letter spacing, and text-autospace
+  // spacing.
+  if (mWordSpacing || mLetterSpacing || mTextAutospace) {
     // Iterate over non-skipped characters
     nsSkipCharsRunIterator run(
         start, nsSkipCharsRunIterator::LENGTH_UNSKIPPED_ONLY, aRange.Length());
@@ -3930,6 +3937,7 @@ void nsTextFrame::PropertyProvider::GetSpacingInternal(Range aRange,
       uint32_t runOffsetInSubstring = run.GetSkippedOffset() - aRange.start;
       gfxSkipCharsIterator iter = run.GetPos();
       for (int32_t i = 0; i < run.GetRunLength(); ++i) {
+        const int32_t currOrigOffset = run.GetOriginalOffset() + i;
         if (!atStart && before != 0.0 &&
             CanAddSpacingBefore(mTextRun, run.GetSkippedOffset() + i,
                                 newlineIsSignificant)) {
@@ -3941,8 +3949,7 @@ void nsTextFrame::PropertyProvider::GetSpacingInternal(Range aRange,
           // End of a cluster, not in a ligature: put letter-spacing after it
           aSpacing[runOffsetInSubstring + i].mAfter += after;
         }
-        if (IsCSSWordSpacingSpace(mCharacterDataBuffer,
-                                  i + run.GetOriginalOffset(), mFrame,
+        if (IsCSSWordSpacingSpace(mCharacterDataBuffer, currOrigOffset, mFrame,
                                   mTextStyle)) {
           // It kinda sucks, but space characters can be part of clusters,
           // and even still be whitespace (I think!)
@@ -3951,6 +3958,32 @@ void nsTextFrame::PropertyProvider::GetSpacingInternal(Range aRange,
                          &iter);
           uint32_t runOffset = iter.GetSkippedOffset() - aRange.start;
           aSpacing[runOffset].mAfter += mWordSpacing;
+        }
+        // Add text-autospace spacing.
+        if (mTextAutospace &&
+            CanAddSpacingAfter(mTextRun, run.GetSkippedOffset() + i,
+                               newlineIsSignificant)) {
+          char32_t leftChar =
+              mCharacterDataBuffer->ScalarValueAt(currOrigOffset);
+          if (leftChar == 0) {
+            MOZ_ASSERT(currOrigOffset >= 1,
+                       "Why can't we get the scalar value at beginning of "
+                       "the string?");
+
+            // We can be here when the code unit at currOrigOffset is a low
+            // surrogate. Try get the scalar value at the previous code unit.
+            leftChar = mCharacterDataBuffer->ScalarValueAt(currOrigOffset - 1);
+          }
+          const char32_t rightChar =
+              (currOrigOffset + 1 <
+               static_cast<int32_t>(mCharacterDataBuffer->GetLength()))
+                  ? mCharacterDataBuffer->ScalarValueAt(currOrigOffset + 1)
+                  : 0;
+          if (leftChar != 0 && rightChar != 0 &&
+              mTextAutospace->ShouldApplySpacing(leftChar, rightChar)) {
+            aSpacing[runOffsetInSubstring + i].mAfter +=
+                mTextAutospace->Spacing();
+          }
         }
         atStart = false;
       }
@@ -4263,6 +4296,16 @@ void nsTextFrame::PropertyProvider::InitFontGroupAndFontMetrics() const {
     }
   }
   mFontGroup = mFontMetrics->GetThebesFontGroup();
+}
+
+void nsTextFrame::PropertyProvider::InitTextAutospace() {
+  const auto styleTextAutospace = mTextStyle->EffectiveTextAutospace();
+  if (TextAutospace::Enabled(styleTextAutospace,
+                             mFrame->StyleVisibility()->mTextOrientation,
+                             mCharacterDataBuffer)) {
+    mTextAutospace.emplace(styleTextAutospace,
+                           GetFontMetrics()->TextAutospaceWidth());
+  }
 }
 
 #ifdef ACCESSIBILITY
@@ -9912,10 +9955,8 @@ void nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
                              nsReflowStatus& aStatus) {
   MOZ_ASSERT(aStatus.IsEmpty(), "Caller should pass a fresh reflow status!");
 
-#ifdef NOISY_REFLOW
   ListTag(stdout);
   printf(": BeginReflow: availableWidth=%d\n", aAvailableWidth);
-#endif
 
   nsPresContext* presContext = PresContext();
 
