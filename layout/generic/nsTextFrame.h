@@ -35,6 +35,58 @@ class nsDisplayText;
 namespace dom {
 class CharacterDataBuffer;
 }
+
+/**
+ * Helper for CSS text-autospace, used by nsTextFrame::PropertyProvider.
+ */
+class MOZ_STACK_CLASS TextAutospace final {
+ public:
+  enum class CharClass : uint8_t {
+    Other,
+    Ideograph,
+    NonIdeographicLetter,
+    NonIdeographicNumeral,
+  };
+
+  enum class Boundary : uint8_t {
+    IdeographAlpha,
+    IdeographNumeric,
+  };
+  using BoundarySet = EnumSet<Boundary>;
+
+  // Returns true if inter-script spacing may be added at boundaries.
+  static bool Enabled(const StyleTextAutospace& aStyleTextAutospace,
+                      const StyleTextOrientation aStyleTextOrientation,
+                      const dom::CharacterDataBuffer* aBuffer);
+
+  TextAutospace(const StyleTextAutospace& aStyleTextAutospace,
+                gfxFloat aSpacing);
+
+  nscoord Spacing() const { return mSpacing; }
+
+  // Return true if spacing should be applied between aLeft and aRight.
+  bool ShouldApplySpacing(char32_t aLeft, char32_t aRight) const;
+
+ private:
+  BoundarySet InitBoundarySet(
+      const StyleTextAutospace& aStyleTextAutospace) const;
+
+  // Return true if aChar is an ideograph.
+  // https://drafts.csswg.org/css-text-4/#ideographs
+  bool IsIdeograph(char32_t aChar) const;
+
+  // Get character class for aChar.
+  // https://drafts.csswg.org/css-text-4/#text-spacing-classes
+  CharClass GetCharClass(char32_t aChar) const;
+
+  // Enabled boundaries. When non-empty, insert spacing at these class
+  // boundaries (e.g. ideograph-alpha, ideograph-numeric).
+  BoundarySet mBoundarySet;
+
+  // Inter-script spacing amount to add at boundaries.
+  nscoord mSpacing{};
+};
+
 }  // namespace mozilla
 
 class nsTextFrame : public nsIFrame {
