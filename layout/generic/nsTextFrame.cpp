@@ -3339,6 +3339,11 @@ nsTextFrame::PropertyProvider::PropertyProvider(
   if (aAtStartOfLine) {
     mStartOfLineOffset = mStart.GetSkippedOffset();
   }
+
+  if (mTextStyle->EffectiveTextAutospace() !=
+      StyleTextAutospace::NO_AUTOSPACE) {
+    mTextAutospaceSpacing = GetFontMetrics()->TextAutospaceWidth();
+  }
 }
 
 nsTextFrame::PropertyProvider::PropertyProvider(
@@ -3365,6 +3370,11 @@ nsTextFrame::PropertyProvider::PropertyProvider(
       mReflowing(false),
       mWhichTextRun(aWhichTextRun) {
   NS_ASSERTION(mTextRun, "Textrun not initialized!");
+
+  if (mTextStyle->EffectiveTextAutospace() !=
+      StyleTextAutospace::NO_AUTOSPACE) {
+    mTextAutospaceSpacing = GetFontMetrics()->TextAutospaceWidth();
+  }
 }
 
 gfx::ShapedTextFlags nsTextFrame::PropertyProvider::GetShapedTextFlags() const {
