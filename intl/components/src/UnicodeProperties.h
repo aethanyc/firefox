@@ -242,6 +242,53 @@ class UnicodeProperties final {
   }
 
   /**
+   * Check if the width of aCh is East Asian Fullwidth (F).
+   */
+  static inline bool IsEastAsianFullWidth(char32_t aCh) {
+    switch (GetIntPropertyValue(aCh, IntProperty::EastAsianWidth)) {
+      case U_EA_FULLWIDTH:
+        return true;
+      case U_EA_WIDE:
+      case U_EA_AMBIGUOUS:
+      case U_EA_HALFWIDTH:
+      case U_EA_NARROW:
+      case U_EA_NEUTRAL:
+        return false;
+    }
+    return false;
+  }
+
+  /**
+   * Check if the CharType of aCh is a letter type.
+   */
+  static inline bool IsLetter(char32_t aCh) {
+    switch (CharType(aCh)) {
+      case GeneralCategory::Uppercase_Letter:
+      case GeneralCategory::Lowercase_Letter:
+      case GeneralCategory::Titlecase_Letter:
+      case GeneralCategory::Modifier_Letter:
+      case GeneralCategory::Other_Letter:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Check if the CharType of aCh is a mark type.
+   */
+  static inline bool IsMark(char32_t aCh) {
+    switch (CharType(aCh)) {
+      case GeneralCategory::Decimal_Number:
+      case GeneralCategory::Letter_Number:
+      case GeneralCategory::Other_Number:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /**
    * Check if the CharType of aCh is a punctuation type.
    */
   static inline bool IsPunctuation(uint32_t aCh) {
