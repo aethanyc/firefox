@@ -12,11 +12,13 @@
 #include "gfxTextRun.h"
 #include "mozilla/Attributes.h"
 #include "mozilla/UniquePtr.h"
+#include "mozilla/dom/CharacterDataBuffer.h"
 #include "mozilla/dom/Text.h"
 #include "mozilla/gfx/2D.h"
 #include "nsIFrame.h"
 #include "nsISelectionController.h"
 #include "nsSplittableFrame.h"
+#include "nsStyleConsts.h"
 
 // Undo the windows.h damage
 #if defined(XP_WIN) && defined(DrawText)
@@ -35,6 +37,59 @@ class nsDisplayText;
 namespace dom {
 class CharacterDataBuffer;
 }
+
+/**
+ * A helper used by nsTextFrame::PropertyProvider to implement CSS
+ * text-autospace.
+ */
+class MOZ_STACK_CLASS TextAutospace final {
+ public:
+  enum class CharClass : uint8_t {
+    Other,
+    Ideograph,
+    NonIdeographicLetter,
+    NonIdeographicNumeral,
+  };
+
+  enum class Boundary : uint8_t {
+    IdeographAlpha,
+    IdeographNumeric,
+  };
+  using BoundarySet = EnumSet<Boundary>;
+
+  // Returns true if spacing needs to be add at any boundary.
+  static bool Enabled(const StyleTextAutospace& aStyleTextAutospace,
+                      const StyleTextOrientation aStyleTextOrientation,
+                      const dom::CharacterDataBuffer* aBuffer);
+
+  explicit TextAutospace(const StyleTextAutospace& aStyleTextAutospace,
+                         gfxFloat aSpacing);
+
+  gfxFloat Spacing() const { return mSpacing; }
+
+  // Return true if spacing should be applied between aLeft and aRight.
+  bool ShouldApplySpacing(char32_t aLeft, char32_t aRight) const;
+
+ private:
+  BoundarySet InitBoundarySet(
+      const StyleTextAutospace& aStyleTextAutospace) const;
+
+  // Return true if aChar is an ideograph.
+  // https://drafts.csswg.org/css-text-4/#ideographs
+  bool IsIdeograph(char32_t aChar) const;
+
+  // Get character class for aChar.
+  // https://drafts.csswg.org/css-text-4/#text-spacing-classes
+  CharClass GetCharClass(char32_t aChar) const;
+
+  // Enabled boundaries. When non-empty, insert spacing at these class
+  // boundaries (e.g. ideograph-alpha, ideograph-numeric).
+  BoundarySet mBoundarySet;
+
+  // Inter-script spacing amount to add at boundaries.
+  gfxFloat mSpacing{};
+};
+
 }  // namespace mozilla
 
 class nsTextFrame : public nsIFrame {
@@ -171,6 +226,9 @@ class nsTextFrame : public nsIFrame {
 
     void InitFontGroupAndFontMetrics() const;
 
+    // Helper for the constructor.
+    void InitTextAutspace();
+
     const RefPtr<gfxTextRun> mTextRun;
     mutable gfxFontGroup* mFontGroup;
     mutable RefPtr<nsFontMetrics> mFontMetrics;
@@ -200,6 +258,9 @@ class nsTextFrame : public nsIFrame {
 
     // space for each letter
     const gfxFloat mLetterSpacing;
+
+    // text-autospace spacing may be needed if TextAutospace exists.
+    Maybe<mozilla::TextAutospace> mTextAutospace;
 
     // min advance for <tab> char
     mutable gfxFloat mMinTabAdvance;
