@@ -1854,7 +1854,10 @@ static gfx::ShapedTextFlags GetSpacingFlags(
   // IsDefinitelyZero() is false, in which case we'll return
   // TEXT_ENABLE_SPACING unnecessarily. That's ok because such cases are likely
   // to be rare, and avoiding TEXT_ENABLE_SPACING is just an optimization.
-  bool nonStandardSpacing = !ls.IsDefinitelyZero() || !ws.IsDefinitelyZero();
+  bool nonStandardSpacing = (StaticPrefs::layout_css_text_autospace_enabled() &&
+                             styleText->EffectiveTextAutospace() !=
+                                 StyleTextAutospace::NO_AUTOSPACE) ||
+                            !ls.IsDefinitelyZero() || !ws.IsDefinitelyZero();
   return nonStandardSpacing ? gfx::ShapedTextFlags::TEXT_ENABLE_SPACING
                             : gfx::ShapedTextFlags();
 }
@@ -3784,7 +3787,10 @@ void nsTextFrame::PropertyProvider::GetSpacingInternal(Range aRange,
   start.SetSkippedOffset(aRange.start);
 
   // First, compute the word and letter spacing
-  if (mWordSpacing || mLetterSpacing) {
+  bool autospace =
+      StaticPrefs::layout_css_text_autospace_enabled() &&
+      mTextStyle->EffectiveTextAutospace() != StyleTextAutospace::NO_AUTOSPACE;
+  if (mWordSpacing || mLetterSpacing || autospace) {
     // Iterate over non-skipped characters
     nsSkipCharsRunIterator run(
         start, nsSkipCharsRunIterator::LENGTH_UNSKIPPED_ONLY, aRange.Length());
@@ -3841,6 +3847,18 @@ void nsTextFrame::PropertyProvider::GetSpacingInternal(Range aRange,
                          &iter);
           uint32_t runOffset = iter.GetSkippedOffset() - aRange.start;
           aSpacing[runOffset].mAfter += mWordSpacing;
+        }
+        // Hack to experiment with "auto-spacing":
+        if (autospace) {
+          if (IsUpperCase(
+                  mCharacterDataBuffer->CharAt(i + run.GetOriginalOffset()))) {
+            // Insert 1/2em extra space after uppercase characters.
+            if (CanAddSpacingAfter(mTextRun, run.GetSkippedOffset() + i,
+                                   newlineIsSignificant)) {
+              nscoord oneEm = mFrame->StyleFont()->mSize.ToAppUnits();
+              aSpacing[runOffsetInSubstring + i].mAfter += oneEm / 2;
+            }
+          }
         }
         atStart = false;
       }
