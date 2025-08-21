@@ -288,6 +288,9 @@ nscoord nsFontMetrics::TextAutospaceWidth() const {
   LayoutDeviceDoubleCoord ic =
       m.ideographicWidth >= 0.0 ? m.ideographicWidth : m.emHeight;
 
+  printf("ideographicWidth %f, emHeight %f, ic %f\n", m.ideographicWidth,
+         m.emHeight, ic.value);
+
   // The inter-script spacing is defined as 1/8 of the CJK advance measure, i.e.
   // 0.125ic: https://drafts.csswg.org/css-text-4/#inter-script-spacing
   constexpr double kFraction = 0.125;

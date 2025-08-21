@@ -3343,9 +3343,9 @@ nsTextFrame::PropertyProvider::PropertyProvider(
   if (mTextStyle->mTextAutospace != StyleTextAutospace::NO_AUTOSPACE) {
     const auto* fontMetrics = GetFontMetrics();
     mTextAutospaceSpacing = fontMetrics->TextAutospaceWidth();
-    auto* fontMetrics = GetFontMetrics();
-    printf("\ntext autospace %d, text autospace width %d\n",
-           mTextStyle->mTextAutospace._0, );
+    printf("%s: text autospace %d, no_autospace %d, text autospace width %f\n",
+           mFrame->ListTag().get(), mTextStyle->mTextAutospace._0,
+           StyleTextAutospace::NO_AUTOSPACE._0, mTextAutospaceSpacing);
   }
 }
 
