@@ -1250,7 +1250,7 @@ struct MOZ_NEEDS_MEMMOVABLE_MEMBERS nsStyleText {
       mozilla::StyleTextWrapStyle::Auto;
 
   mozilla::StyleTextAutospace mTextAutospace =
-      mozilla::StyleTextAutospace::NORMAL;
+      mozilla::StyleTextAutospace::NO_AUTOSPACE;
 
   char16_t TextSecurityMaskChar() const {
     switch (mWebkitTextSecurity) {
