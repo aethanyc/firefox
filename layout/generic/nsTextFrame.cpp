@@ -1980,7 +1980,11 @@ gfx::ShapedTextFlags nsTextFrame::GetSpacingFlags() const {
   // IsDefinitelyZero() is false, in which case we'll return
   // TEXT_ENABLE_SPACING unnecessarily. That's ok because such cases are likely
   // to be rare, and avoiding TEXT_ENABLE_SPACING is just an optimization.
-  bool nonStandardSpacing = !ls.IsDefinitelyZero() || !ws.IsDefinitelyZero();
+  bool nonStandardSpacing =
+      !ls.IsDefinitelyZero() || !ws.IsDefinitelyZero() ||
+      TextAutospace::Enabled(styleText->EffectiveTextAutospace(),
+                             StyleVisibility()->mTextOrientation,
+                             CharacterDataBuffer());
   return nonStandardSpacing ? gfx::ShapedTextFlags::TEXT_ENABLE_SPACING
                             : gfx::ShapedTextFlags();
 }
@@ -3465,6 +3469,7 @@ nsTextFrame::PropertyProvider::PropertyProvider(
   if (aAtStartOfLine) {
     mStartOfLineOffset = mStart.GetSkippedOffset();
   }
+  InitTextAutspace();
 }
 
 nsTextFrame::PropertyProvider::PropertyProvider(
@@ -3491,6 +3496,7 @@ nsTextFrame::PropertyProvider::PropertyProvider(
       mReflowing(false),
       mWhichTextRun(aWhichTextRun) {
   NS_ASSERTION(mTextRun, "Textrun not initialized!");
+  InitTextAutspace();
 }
 
 gfx::ShapedTextFlags nsTextFrame::PropertyProvider::GetShapedTextFlags() const {
@@ -3893,8 +3899,9 @@ void nsTextFrame::PropertyProvider::GetSpacingInternal(Range aRange,
   gfxSkipCharsIterator start(mStart);
   start.SetSkippedOffset(aRange.start);
 
-  // First, compute the word and letter spacing
-  if (mWordSpacing || mLetterSpacing) {
+  // First, compute the word spacing, letter spacing, and text-autospace
+  // spacing.
+  if (mWordSpacing || mLetterSpacing || mTextAutospace) {
     // Iterate over non-skipped characters
     nsSkipCharsRunIterator run(
         start, nsSkipCharsRunIterator::LENGTH_UNSKIPPED_ONLY, aRange.Length());
@@ -3951,6 +3958,23 @@ void nsTextFrame::PropertyProvider::GetSpacingInternal(Range aRange,
                          &iter);
           uint32_t runOffset = iter.GetSkippedOffset() - aRange.start;
           aSpacing[runOffset].mAfter += mWordSpacing;
+        }
+
+        // Add text-autospace spacing.
+        if (mTextAutospace) {
+          const char16_t nextChar =
+              mCharacterDataBuffer->SafeCharAt(run.GetOriginalOffset() + i + 1);
+          if (nextChar) {
+            // XXX: Check surrogate for characters that are outside BMP.
+            const char16_t currChar =
+                mCharacterDataBuffer->CharAt(run.GetOriginalOffset() + i);
+            if (mTextAutospace->ShouldApplySpacing(currChar, nextChar) &&
+                CanAddSpacingAfter(mTextRun, run.GetSkippedOffset() + i,
+                                   newlineIsSignificant)) {
+              aSpacing[runOffsetInSubstring + i].mAfter +=
+                  mTextAutospace->Spacing();
+            }
+          }
         }
         atStart = false;
       }
@@ -4263,6 +4287,16 @@ void nsTextFrame::PropertyProvider::InitFontGroupAndFontMetrics() const {
     }
   }
   mFontGroup = mFontMetrics->GetThebesFontGroup();
+}
+
+void nsTextFrame::PropertyProvider::InitTextAutspace() {
+  const auto styleTextAutospace = mTextStyle->EffectiveTextAutospace();
+  if (TextAutospace::Enabled(styleTextAutospace,
+                             mFrame->StyleVisibility()->mTextOrientation,
+                             mCharacterDataBuffer)) {
+    mTextAutospace.emplace(styleTextAutospace,
+                           GetFontMetrics()->TextAutospaceWidth());
+  }
 }
 
 #ifdef ACCESSIBILITY
