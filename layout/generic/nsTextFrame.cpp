@@ -1853,7 +1853,9 @@ static gfx::ShapedTextFlags GetSpacingFlags(nsIFrame* aFrame) {
   // IsDefinitelyZero() is false, in which case we'll return
   // TEXT_ENABLE_SPACING unnecessarily. That's ok because such cases are likely
   // to be rare, and avoiding TEXT_ENABLE_SPACING is just an optimization.
-  bool nonStandardSpacing = !ls.IsDefinitelyZero() || !ws.IsDefinitelyZero();
+  bool nonStandardSpacing =
+      !ls.IsDefinitelyZero() || !ws.IsDefinitelyZero() ||
+      nsTextFrame::TextAutospace::Enabled(styleText->EffectiveTextAutospace());
   return nonStandardSpacing ? gfx::ShapedTextFlags::TEXT_ENABLE_SPACING
                             : gfx::ShapedTextFlags();
 }
@@ -3309,6 +3311,119 @@ static bool IsInBounds(const gfxSkipCharsIterator& aStart,
 }
 #endif
 
+bool nsTextFrame::TextAutospace::Enabled(
+    const StyleTextAutospace& aStyleTextAutospace) {
+  if (aStyleTextAutospace == StyleTextAutospace::NO_AUTOSPACE ||
+      aStyleTextAutospace == StyleTextAutospace::AUTO) {
+    // 'text-autospace: auto' is UA-defined. Currently, WebKit parses `auto` but
+    // does not add spacing; Blink does not parse 'auto' (treated as invalid).
+    // To align with other engines, we treat 'auto' the same as a no-op.
+    return false;
+  }
+  return true;
+}
+
+nsTextFrame::TextAutospace::TextAutospace(
+    const StyleTextAutospace& aStyleTextAutospace, gfxFloat aSpacing)
+    : mBoundarySet(InitBoundarySet(aStyleTextAutospace)), mSpacing(aSpacing) {}
+
+bool nsTextFrame::TextAutospace::ShouldApplySpacing(char32_t aLeft,
+                                                    char32_t aRight) const {
+  auto leftClass = GetCharClass(aLeft);
+  auto rightClass = GetCharClass(aRight);
+  if (mBoundarySet.contains(Boundary::IdeographAlpha)) {
+    if ((leftClass == CharClass::Ideograph &&
+         rightClass == CharClass::NonIdeographicLetter) ||
+        (leftClass == CharClass::NonIdeographicLetter &&
+         rightClass == CharClass::Ideograph)) {
+      return true;
+    }
+  }
+
+  if (mBoundarySet.contains(Boundary::IdeographNumeric)) {
+    if ((leftClass == CharClass::Ideograph &&
+         rightClass == CharClass::NonIdeographicNumeral) ||
+        (leftClass == CharClass::NonIdeographicNumeral &&
+         rightClass == CharClass::Ideograph)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+auto nsTextFrame::TextAutospace::InitBoundarySet(
+    const StyleTextAutospace& aStyleTextAutospace) const -> BoundarySet {
+  if (aStyleTextAutospace == StyleTextAutospace::NORMAL) {
+    return {Boundary::IdeographAlpha, Boundary::IdeographNumeric};
+  }
+
+  if (aStyleTextAutospace == StyleTextAutospace::IDEOGRAPH_ALPHA) {
+    return {Boundary::IdeographAlpha};
+  }
+
+  if (aStyleTextAutospace == StyleTextAutospace::IDEOGRAPH_NUMERIC) {
+    return {Boundary::IdeographNumeric};
+  }
+
+  return {};
+}
+
+// XXX: What about codepoint outside BMP. E.g. CJK Unified Ideographs Extension
+// B from U+20000 to U+2A6DF. They also have script=Han. Should caller check
+// surrogates?
+bool nsTextFrame::TextAutospace::IsIdeograph(char32_t aChar) const {
+  // TODO: add a fast path to reject ASCII or others characters that are
+  // obviously not ideographs.
+
+  // All characters in the range of U+3041 to U+30FF, except those that belong
+  // to Unicode Punctuation [P*] general category.
+  if (u'\u3041' <= aChar && aChar <= u'\u30FF') {
+    return !intl::UnicodeProperties::IsPunctuation(aChar);
+  }
+
+  // CJK Strokes (U+31C0 to U+31EF).
+  if (u'\u31C0' <= aChar && aChar <= u'\u31EF') {
+    return true;
+  }
+
+  // Katakana Phonetic Extensions (U+31F0 to U+31FF).
+  if (u'\u31F0' <= aChar && aChar <= u'\u31FF') {
+    return true;
+  }
+
+  // All characters that have the Han script property.
+  if (intl::UnicodeProperties::GetScriptCode(aChar) == intl::Script::HAN) {
+    return true;
+  }
+
+  return false;
+}
+
+auto nsTextFrame::TextAutospace::GetCharClass(char32_t aChar) const
+    -> CharClass {
+  if (TextAutospace::IsIdeograph(aChar)) {
+    return CharClass::Ideograph;
+  }
+
+  // From now on, aCh is *not* an ideograph.
+  if (intl::UnicodeProperties::IsLetter(aChar) ||
+      intl::UnicodeProperties::IsMark(aChar)) {
+    if (!intl::UnicodeProperties::IsEastAsianFullWidth(aChar)) {
+      return CharClass::NonIdeographicLetter;
+    }
+  }
+
+  if (intl::UnicodeProperties::CharType(aChar) ==
+      intl::GeneralCategory::Decimal_Number) {
+    if (!intl::UnicodeProperties::IsEastAsianFullWidth(aChar)) {
+      return CharClass::NonIdeographicNumeral;
+    }
+  }
+
+  return CharClass::Other;
+}
+
 nsTextFrame::PropertyProvider::PropertyProvider(
     gfxTextRun* aTextRun, const nsStyleText* aTextStyle,
     const class CharacterDataBuffer* aBuffer, nsTextFrame* aFrame,
@@ -3338,6 +3453,12 @@ nsTextFrame::PropertyProvider::PropertyProvider(
   if (aAtStartOfLine) {
     mStartOfLineOffset = mStart.GetSkippedOffset();
   }
+
+  const auto styleTextAutospace = mTextStyle->EffectiveTextAutospace();
+  if (TextAutospace::Enabled(styleTextAutospace)) {
+    mTextAutospace.emplace(styleTextAutospace,
+                           GetFontMetrics()->TextAutospaceWidth());
+  }
 }
 
 nsTextFrame::PropertyProvider::PropertyProvider(
@@ -3364,6 +3485,12 @@ nsTextFrame::PropertyProvider::PropertyProvider(
       mReflowing(false),
       mWhichTextRun(aWhichTextRun) {
   NS_ASSERTION(mTextRun, "Textrun not initialized!");
+
+  const auto styleTextAutospace = mTextStyle->EffectiveTextAutospace();
+  if (TextAutospace::Enabled(styleTextAutospace)) {
+    mTextAutospace.emplace(styleTextAutospace,
+                           GetFontMetrics()->TextAutospaceWidth());
+  }
 }
 
 gfx::ShapedTextFlags nsTextFrame::PropertyProvider::GetShapedTextFlags() const {
@@ -3766,8 +3893,9 @@ void nsTextFrame::PropertyProvider::GetSpacingInternal(Range aRange,
   gfxSkipCharsIterator start(mStart);
   start.SetSkippedOffset(aRange.start);
 
-  // First, compute the word and letter spacing
-  if (mWordSpacing || mLetterSpacing) {
+  // First, compute the word spacing, letter spacing, and text-autospace
+  // spacing.
+  if (mWordSpacing || mLetterSpacing || mTextAutospace) {
     // Iterate over non-skipped characters
     nsSkipCharsRunIterator run(
         start, nsSkipCharsRunIterator::LENGTH_UNSKIPPED_ONLY, aRange.Length());
@@ -3824,6 +3952,22 @@ void nsTextFrame::PropertyProvider::GetSpacingInternal(Range aRange,
                          &iter);
           uint32_t runOffset = iter.GetSkippedOffset() - aRange.start;
           aSpacing[runOffset].mAfter += mWordSpacing;
+        }
+
+        if (mTextAutospace) {
+          const char16_t nextCh =
+              mCharacterDataBuffer->SafeCharAt(run.GetOriginalOffset() + i + 1);
+          if (nextCh) {
+            // XXX: Check surrogate for characters that are outside BMP.
+            const char16_t currCh =
+                mCharacterDataBuffer->CharAt(run.GetOriginalOffset() + i);
+            if (mTextAutospace->ShouldApplySpacing(currCh, nextCh) &&
+                CanAddSpacingAfter(mTextRun, run.GetSkippedOffset() + i,
+                                   newlineIsSignificant)) {
+              aSpacing[runOffsetInSubstring + i].mAfter +=
+                  mTextAutospace->Spacing();
+            }
+          }
         }
         atStart = false;
       }

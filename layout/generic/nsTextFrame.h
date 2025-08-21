@@ -53,6 +53,55 @@ class nsTextFrame : public nsIFrame {
   struct TabWidthStore;
 
   /**
+   * A helper class to support CSS text-autospace.
+   */
+  class MOZ_STACK_CLASS TextAutospace final {
+   public:
+    enum class CharClass : uint8_t {
+      Other,
+      Ideograph,
+      NonIdeographicLetter,
+      NonIdeographicNumeral,
+    };
+
+    enum class Boundary : uint8_t {
+      IdeographAlpha,
+      IdeographNumeric,
+    };
+    using BoundarySet = mozilla::EnumSet<Boundary>;
+
+    static bool Enabled(const mozilla::StyleTextAutospace& aStyleTextAutospace);
+
+    explicit TextAutospace(
+        const mozilla::StyleTextAutospace& aStyleTextAutospace,
+        gfxFloat aSpacing);
+
+    gfxFloat Spacing() const { return mSpacing; }
+
+    // Return true if spacing should be applied between aLeft and aRight.
+    bool ShouldApplySpacing(char32_t aLeft, char32_t aRight) const;
+
+    // Get character class for aChar.
+    // https://drafts.csswg.org/css-text-4/#text-spacing-classes
+    CharClass GetCharClass(char32_t aChar) const;
+
+    // Return true if aChar is an ideograph.
+    // https://drafts.csswg.org/css-text-4/#ideographs
+    bool IsIdeograph(char32_t aChar) const;
+
+   private:
+    BoundarySet InitBoundarySet(
+        const mozilla::StyleTextAutospace& aStyleTextAutospace) const;
+
+    // When non-empty, inter-script spacing is inserted at the listed class
+    // boundaries (e.g. ideograph-alpha, ideograph-numeric).
+    BoundarySet mBoundarySet;
+
+    // The amount of inter-script spacing.
+    gfxFloat mSpacing{};
+  };
+
+  /**
    * An implementation of gfxTextRun::PropertyProvider that computes spacing and
    * hyphenation based on CSS properties for a text frame.
    */
@@ -215,6 +264,8 @@ class nsTextFrame : public nsIFrame {
     const bool mReflowing;
     const nsTextFrame::TextRunType mWhichTextRun;
     uint32_t mStartOfLineOffset = UINT32_MAX;
+
+    Maybe<TextAutospace> mTextAutospace;
   };
 
   explicit nsTextFrame(ComputedStyle* aStyle, nsPresContext* aPresContext,
