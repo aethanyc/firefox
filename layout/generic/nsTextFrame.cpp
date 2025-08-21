@@ -3340,12 +3340,20 @@ nsTextFrame::PropertyProvider::PropertyProvider(
     mStartOfLineOffset = mStart.GetSkippedOffset();
   }
 
-  if (mTextStyle->mTextAutospace != StyleTextAutospace::NO_AUTOSPACE) {
+  printf(
+      "%s: (before) text autospace %d, no_autospace %d, text autospace width "
+      "%f\n",
+      mFrame->ListTag().get(), mTextStyle->EffectiveTextAutospace()._0,
+      StyleTextAutospace::NO_AUTOSPACE._0, mTextAutospaceSpacing);
+  if (mTextStyle->EffectiveTextAutospace() !=
+      StyleTextAutospace::NO_AUTOSPACE) {
     const auto* fontMetrics = GetFontMetrics();
     mTextAutospaceSpacing = fontMetrics->TextAutospaceWidth();
-    auto* fontMetrics = GetFontMetrics();
-    printf("\ntext autospace %d, text autospace width %d\n",
-           mTextStyle->mTextAutospace._0, );
+    printf(
+        "%s: (after) text autospace %d, no_autospace %d, text autospace width "
+        "%f\n",
+        mFrame->ListTag().get(), mTextStyle->EffectiveTextAutospace()._0,
+        StyleTextAutospace::NO_AUTOSPACE._0, mTextAutospaceSpacing);
   }
 }
 
