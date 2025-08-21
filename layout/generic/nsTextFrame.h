@@ -201,6 +201,8 @@ class nsTextFrame : public nsIFrame {
     // space for each letter
     const gfxFloat mLetterSpacing;
 
+    gfxFloat mTextAutospaceSpacing;
+
     // min advance for <tab> char
     mutable gfxFloat mMinTabAdvance;
 

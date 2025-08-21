@@ -3339,6 +3339,14 @@ nsTextFrame::PropertyProvider::PropertyProvider(
   if (aAtStartOfLine) {
     mStartOfLineOffset = mStart.GetSkippedOffset();
   }
+
+  if (mTextStyle->mTextAutospace != StyleTextAutospace::NO_AUTOSPACE) {
+    const auto* fontMetrics = GetFontMetrics();
+    mTextAutospaceSpacing = fontMetrics->TextAutospaceWidth();
+    auto* fontMetrics = GetFontMetrics();
+    printf("\ntext autospace %d, text autospace width %d\n",
+           mTextStyle->mTextAutospace._0, );
+  }
 }
 
 nsTextFrame::PropertyProvider::PropertyProvider(
