@@ -564,4 +564,35 @@ bool IsPunctuationForWordSelect(char16_t aCh) {
   }
 }
 
+// XXX: What about codepoint outside BMP. E.g. CJK Unified Ideographs Extension
+// B from U+20000 to U+2A6DF. They also have script=Han. Should caller check
+// surrogates?
+bool IsIdeograph(char32_t aCh) {
+  // XXX should we add a fast path to reject ASCII or others that are obviously
+  // not ideograph.
+
+  // All characters in the range of U+3041 to U+30FF, except those that belong
+  // to Unicode Punctuation [P*] general category.
+  if (aCh >= 0x3041 && aCh <= 0x30FF) {
+    return !intl::UnicodeProperties::IsPunctuation(aCh);
+  }
+
+  // CJK Strokes (U+31C0 to U+31EF).
+  if (aCh >= 0x31C0 && aCh <= 0x31EF) {
+    return true;
+  }
+
+  // Katakana Phonetic Extensions (U+31F0 to U+31FF).
+  if (aCh >= 0x31F0 && aCh <= 0x31FF) {
+    return true;
+  }
+
+  // All characters that have the Han script property.
+  if (intl::UnicodeProperties::GetScriptCode(aCh) == intl::Script::HAN) {
+    return true;
+  }
+
+  return false;
+}
+
 }  // namespace mozilla

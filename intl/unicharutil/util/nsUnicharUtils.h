@@ -167,6 +167,11 @@ bool IsEastAsianPunctuation(uint32_t u);
  */
 bool IsPunctuationForWordSelect(char16_t aCh);
 
+/**
+ * Utilities for CSS text-autospace.
+ */
+bool IsIdeograph(char32_t aCh);
+
 }  // namespace mozilla
 
 #endif /* nsUnicharUtils_h__ */
