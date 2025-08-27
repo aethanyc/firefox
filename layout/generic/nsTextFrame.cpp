@@ -25,6 +25,7 @@
 #include "mozilla/DebugOnly.h"
 #include "mozilla/IntegerRange.h"
 #include "mozilla/Likely.h"
+#include "mozilla/Logging.h"
 #include "mozilla/MathAlgorithms.h"
 #include "mozilla/PodOperations.h"
 #include "mozilla/PresShell.h"
@@ -1854,7 +1855,9 @@ static gfx::ShapedTextFlags GetSpacingFlags(
   // IsDefinitelyZero() is false, in which case we'll return
   // TEXT_ENABLE_SPACING unnecessarily. That's ok because such cases are likely
   // to be rare, and avoiding TEXT_ENABLE_SPACING is just an optimization.
-  bool nonStandardSpacing = !ls.IsDefinitelyZero() || !ws.IsDefinitelyZero();
+  bool nonStandardSpacing =
+      styleText->EffectiveTextAutospace() != StyleTextAutospace::NO_AUTOSPACE ||
+      !ls.IsDefinitelyZero() || !ws.IsDefinitelyZero();
   return nonStandardSpacing ? gfx::ShapedTextFlags::TEXT_ENABLE_SPACING
                             : gfx::ShapedTextFlags();
 }
@@ -3777,8 +3780,12 @@ void nsTextFrame::PropertyProvider::GetSpacingInternal(Range aRange,
   gfxSkipCharsIterator start(mStart);
   start.SetSkippedOffset(aRange.start);
 
-  // First, compute the word and letter spacing
-  if (mWordSpacing || mLetterSpacing) {
+  printf("In GetSpacingInternal, mTextAutospaceSpacing %f\n",
+         mTextAutospaceSpacing);
+
+  // First, compute the word spacing, letter spacing, and text-autospace
+  // spacing.
+  if (mWordSpacing || mLetterSpacing || mTextAutospaceSpacing) {
     // Iterate over non-skipped characters
     nsSkipCharsRunIterator run(
         start, nsSkipCharsRunIterator::LENGTH_UNSKIPPED_ONLY, aRange.Length());
@@ -3835,6 +3842,30 @@ void nsTextFrame::PropertyProvider::GetSpacingInternal(Range aRange,
                          &iter);
           uint32_t runOffset = iter.GetSkippedOffset() - aRange.start;
           aSpacing[runOffset].mAfter += mWordSpacing;
+        }
+        const bool hasNextCh = (i < run.GetRunLength() - 1);
+        if (mTextAutospaceSpacing && hasNextCh) {
+          /// XXX: Do we want to check surrogate for characters that are outside
+          /// BMP?
+          char16_t currCh =
+              mCharacterDataBuffer->CharAt(run.GetOriginalOffset() + i);
+          char16_t nextCh =
+              mCharacterDataBuffer->CharAt(run.GetOriginalOffset() + i + 1);
+
+          // XXX: Check characters with text spacing classes.
+          // https://drafts.csswg.org/css-text-4/#text-spacing-classes
+          bool currChIsIdeograph = IsIdeograph(currCh);
+          bool nextChIsIdeograph = IsIdeograph(nextCh);
+          if (currChIsIdeograph != nextChIsIdeograph) {
+            printf("currCh %X (is ideograph %s), nextCh %X (is ideograph %s)\n",
+                   currCh, YesOrNo(currChIsIdeograph), nextCh,
+                   YesOrNo(nextChIsIdeograph));
+            if (CanAddSpacingAfter(mTextRun, run.GetSkippedOffset() + i,
+                                   newlineIsSignificant)) {
+              aSpacing[runOffsetInSubstring + i].mAfter +=
+                  mTextAutospaceSpacing;
+            }
+          }
         }
         atStart = false;
       }
@@ -5691,6 +5722,7 @@ void nsTextFrame::PaintDecorationLine(
           path, aParams.paintingShadows, params.color);
     }
   } else {
+    printf("%s: Calling PaintDecorationLine\n", ListTag().get());
     nsCSSRendering::PaintDecorationLine(this, *aParams.context->GetDrawTarget(),
                                         params);
   }
