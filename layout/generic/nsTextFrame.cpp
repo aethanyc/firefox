@@ -1844,8 +1844,7 @@ static nscoord WordSpacing(nsIFrame* aFrame, const gfxTextRun* aTextRun,
 
 // Returns gfxTextRunFactory::TEXT_ENABLE_SPACING if non-standard
 // letter-spacing or word-spacing is present.
-static gfx::ShapedTextFlags GetSpacingFlags(
-    nsIFrame* aFrame, const nsStyleText* aStyleText = nullptr) {
+static gfx::ShapedTextFlags GetSpacingFlags(nsIFrame* aFrame) {
   const nsStyleText* styleText = aFrame->StyleText();
   const auto& ls = styleText->mLetterSpacing;
   const auto& ws = styleText->mWordSpacing;
