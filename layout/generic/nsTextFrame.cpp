@@ -108,8 +108,7 @@ using namespace mozilla::gfx;
 namespace mozilla {
 
 bool TextAutospace::Enabled(const StyleTextAutospace& aStyleTextAutospace,
-                            const nsIFrame* aFrame,
-                            const CharacterDataBuffer& aBuffer) {
+                            const nsIFrame* aFrame) {
   if (aStyleTextAutospace == StyleTextAutospace::NO_AUTOSPACE) {
     return false;
   }
@@ -131,11 +130,6 @@ bool TextAutospace::Enabled(const StyleTextAutospace& aStyleTextAutospace,
     //
     // Note: 'text-combine-upright' is checked in
     // PropertyProvider::GetSpacingInternal(), so we do not check it here.
-    return false;
-  }
-
-  if (!aBuffer.Is2b()) {
-    // An 8-bit character cannot be an ideograph.
     return false;
   }
 
@@ -169,7 +163,7 @@ bool TextAutospace::ShouldApplySpacing(CharClass aPrevClass,
   return false;
 }
 
-bool TextAutospace::IsIdeograph(char32_t aChar) const {
+bool TextAutospace::IsIdeograph(char32_t aChar) {
   // All characters in the range of U+3041 to U+30FF, except those that belong
   // to Unicode Punctuation [P*] general category.
   if (0x3041 <= aChar && aChar <= 0x30FF) {
@@ -194,7 +188,7 @@ bool TextAutospace::IsIdeograph(char32_t aChar) const {
   return false;
 }
 
-TextAutospace::CharClass TextAutospace::GetCharClass(char32_t aChar) const {
+TextAutospace::CharClass TextAutospace::GetCharClass(char32_t aChar) {
   if (IsIdeograph(aChar)) {
     return CharClass::Ideograph;
   }
@@ -1987,8 +1981,7 @@ gfx::ShapedTextFlags nsTextFrame::GetSpacingFlags() const {
   // to be rare, and avoiding TEXT_ENABLE_SPACING is just an optimization.
   bool nonStandardSpacing =
       !ls.IsDefinitelyZero() || !ws.IsDefinitelyZero() ||
-      TextAutospace::Enabled(styleText->EffectiveTextAutospace(), this,
-                             CharacterDataBuffer());
+      TextAutospace::Enabled(styleText->EffectiveTextAutospace(), this);
   return nonStandardSpacing ? gfx::ShapedTextFlags::TEXT_ENABLE_SPACING
                             : gfx::ShapedTextFlags();
 }
@@ -3884,6 +3877,63 @@ static gfxFloat ComputeTabWidthAppUnits(const nsIFrame* aFrame) {
           styleText->mWordSpacing.Resolve(spaceWidth));
 }
 
+TextAutospace::CharClass GetClassOfLastClusterBefore(const nsIFrame* aFrame) {
+  while (!aFrame->GetPrevSibling() && aFrame->GetParent()->IsInlineFrame()) {
+    // If this is the first child of an inline container, we want to ascend to
+    // the parent and look at what precedes it.
+    aFrame = aFrame->GetParent();
+  }
+  aFrame = aFrame->GetPrevSibling();
+  while (aFrame) {
+    if (aFrame->IsPlaceholderFrame()) {
+      // Skip over out-of-flow placeholders.
+      aFrame = aFrame->GetPrevSibling();
+      continue;
+    }
+    if (aFrame->IsInlineFrame()) {
+      // Descend into inline containers and go backwards through their content.
+      const auto* inlineFrame = static_cast<const nsInlineFrame*>(aFrame);
+      aFrame = inlineFrame->PrincipalChildList().LastChild();
+      continue;
+    }
+    if (aFrame->IsTextFrame()) {
+      // Look for the class of the last character in the frame. The characters
+      // we actually care about will not have been skipped during whitespace
+      // processing, so we can just look at the text in the DOM without having
+      // to deal with a gfxSkipCharsIterator here.
+      const auto* textFrame = static_cast<const nsTextFrame*>(aFrame);
+      const auto& buffer = textFrame->CharacterDataBuffer();
+      int32_t i = textFrame->GetContentEnd();
+      while (i > textFrame->GetContentOffset()) {
+        char32_t ch = buffer.CharAt(--i);
+        if (NS_IS_LOW_SURROGATE(ch) && i > textFrame->GetContentOffset()) {
+          ch = buffer.ScalarValueAt(--i);
+        }
+        auto cls = TextAutospace::GetCharClass(ch);
+        if (cls == TextAutospace::CharClass::CombiningMark) {
+          // Ignore trailing combining marks.
+          continue;
+        }
+        if (cls == TextAutospace::CharClass::NonIdeographicLetter ||
+            cls == TextAutospace::CharClass::NonIdeographicNumeral) {
+          // If we're in vertical writing mode with forced upright glyph
+          // orientation, these classes are not applicable.
+          if (textFrame->StyleVisibility()->mTextOrientation ==
+                  StyleTextOrientation::Upright ||
+              textFrame->Style()->IsTextCombined()) {
+            cls = TextAutospace::CharClass::Other;
+          }
+        }
+        return cls;
+      }
+      aFrame = aFrame->GetPrevSibling();
+      continue;
+    }
+    return TextAutospace::CharClass::Other;
+  }
+  return TextAutospace::CharClass::Other;
+}
+
 void nsTextFrame::PropertyProvider::GetSpacingInternal(Range aRange,
                                                        Spacing* aSpacing,
                                                        bool aIgnoreTabs) const {
@@ -3940,7 +3990,7 @@ void nsTextFrame::PropertyProvider::GetSpacingInternal(Range aRange,
 
     using CharClass = TextAutospace::CharClass;
     // Previous non-mark class of a scalar at a cluster start.
-    CharClass prevClass = CharClass::Other;
+    CharClass prevClass = CharClass::CombiningMark;
     if (mTextAutospace) {
       // We may need the class of the scalar immediately before the current
       // aRange.
@@ -3951,12 +4001,14 @@ void nsTextFrame::PropertyProvider::GetSpacingInternal(Range aRange,
           FindClusterStart(mTextRun, 0, &findPrevCluster);
           const char32_t prevScalar = mCharacterDataBuffer.ScalarValueAt(
               findPrevCluster.GetOriginalOffset());
-          prevClass = mTextAutospace->GetCharClass(prevScalar);
+          prevClass = TextAutospace::GetCharClass(prevScalar);
         } while (prevClass == CharClass::CombiningMark &&
                  findPrevCluster.GetOriginalOffset() > 0);
-      } else {
-        // Bug 1986837: Look for the last non-mark cluster start of the
-        // preceding frame, if any.
+      }
+      if (prevClass == CharClass::CombiningMark) {
+        // If we didn't find a valid preceding class, try to look at the
+        // previous frame (if any).
+        prevClass = GetClassOfLastClusterBefore(mFrame);
       }
     }
     while (run.NextRun()) {
@@ -3990,7 +4042,7 @@ void nsTextFrame::PropertyProvider::GetSpacingInternal(Range aRange,
             mTextRun->IsClusterStart(run.GetSkippedOffset() + i)) {
           const char32_t currScalar =
               mCharacterDataBuffer.ScalarValueAt(run.GetOriginalOffset() + i);
-          const auto currClass = mTextAutospace->GetCharClass(currScalar);
+          const auto currClass = TextAutospace::GetCharClass(currScalar);
 
           // It is rare for the current class to be is a combining mark, as
           // combining marks are not cluster starts. We still check in case a
@@ -4319,8 +4371,7 @@ void nsTextFrame::PropertyProvider::InitFontGroupAndFontMetrics() const {
 
 void nsTextFrame::PropertyProvider::InitTextAutospace() {
   const auto styleTextAutospace = mTextStyle->EffectiveTextAutospace();
-  if (TextAutospace::Enabled(styleTextAutospace, mFrame,
-                             mCharacterDataBuffer)) {
+  if (TextAutospace::Enabled(styleTextAutospace, mFrame)) {
     mTextAutospace.emplace(styleTextAutospace,
                            GetFontMetrics()->InterScriptSpacingWidth());
   }
