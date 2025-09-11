@@ -3860,6 +3860,65 @@ static gfxFloat ComputeTabWidthAppUnits(const nsIFrame* aFrame) {
           styleText->mWordSpacing.Resolve(spaceWidth));
 }
 
+// Get the autospacing class of the last character in the given textframe's
+// content. Because none of the characters of interest will have been collapsed
+// during whitespace processing, we don't actually bother mapping gfxSkipChars,
+// but just look at the underlying DOM text.
+static TextAutospace::CharClass LastNonMarkCharClass(const nsTextFrame* f) {
+  using CharClass = TextAutospace::CharClass;
+  const auto& buffer = f->CharacterDataBuffer();
+  int32_t i = f->GetContentEnd();
+  while (i > f->GetContentOffset()) {
+    char32_t ch = buffer.CharAt(--i);
+    if (NS_IS_LOW_SURROGATE(ch) && i > f->GetContentOffset()) {
+      ch = buffer.ScalarValueAt(--i);
+    }
+    auto charClass = TextAutospace::GetCharClass(ch);
+    if (charClass != CharClass::CombiningMark) {
+      return charClass;
+    }
+  }
+  // If we reached the beginning of the frame, and there's a prev-in-flow,
+  // that means we've encountered a line-break and can return Other.
+  if (f->GetPrevInFlow()) {
+    return CharClass::Other;
+  }
+  // Otherwise, return CombiningMark so the caller will keep iterating.
+  return CharClass::CombiningMark;
+}
+
+// Look for the autospacing class of the content preceding the given
+// textframe, returning CombiningMark if nothing relevant is found.
+static TextAutospace::CharClass GetPrecedingCharClassFromMappedFlows(
+    const nsTextFrame* aFrame, const gfxTextRun* aTextRun) {
+  using CharClass = TextAutospace::CharClass;
+  MOZ_ASSERT(!(mTextRun->GetFlags2() & nsTextFrameUtils::Flags::IsSimpleFlow),
+             "not to be called for simple-flow textruns!");
+
+  TextRunMappedFlow* mappedFlows = GetMappedFlows(aTextRun);
+  auto data = static_cast<TextRunUserData*>(aTextRun->GetUserData());
+  MOZ_ASSERT(mappedFlows && data, "missing mapped-flow data!");
+
+  // Search for the current frame in the mapped flows.
+  uint32_t i = 0;
+  for (; i < data->mMappedFlowCount; ++i) {
+    if (mappedFlows[i].mStartFrame == aFrame) {
+      break;
+    }
+  }
+  MOZ_ASSERT(mappedFlows[i].mStartFrame == aFrame,
+             "frame not found in mapped flows!");
+
+  auto charClass = CharClass::CombiningMark;
+  while (i > 0 && charClass == CharClass::CombiningMark) {
+    const nsTextFrame* f = mappedFlows[--i].mStartFrame->LastInFlow();
+    charClass = LastNonMarkCharClass(f);
+    // If f has a prev-in-flow, LastNonMarkCharClass will return Other, so
+    // this loop will only iterate over flows that were not line-broken.
+  }
+  return charClass;
+}
+
 void nsTextFrame::PropertyProvider::GetSpacingInternal(Range aRange,
                                                        Spacing* aSpacing,
                                                        bool aIgnoreTabs) const {
@@ -3916,7 +3975,7 @@ void nsTextFrame::PropertyProvider::GetSpacingInternal(Range aRange,
 
     using CharClass = TextAutospace::CharClass;
     // Previous non-mark class of a scalar at a cluster start.
-    CharClass prevClass = CharClass::Other;
+    CharClass prevClass = CharClass::CombiningMark;
     if (mTextAutospace) {
       // We may need the class of the scalar immediately before the current
       // aRange.
@@ -3930,11 +3989,31 @@ void nsTextFrame::PropertyProvider::GetSpacingInternal(Range aRange,
           prevClass = TextAutospace::GetCharClass(prevScalar);
         } while (prevClass == CharClass::CombiningMark &&
                  findPrevCluster.GetOriginalOffset() > 0);
-      } else {
-        // Bug 1986837: Look for the last non-mark cluster start of the
-        // preceding frame, if any.
+      }
+      // If we didn't find a (non-mark) class, we need to look at the preceding
+      // content (if any) to see what it ended with.
+      if (prevClass == CharClass::CombiningMark) {
+        // If we have a prev-in-flow, we're after a line-break and so autospace
+        // does not apply here; just set prevClass to Other.
+        if (mFrame->GetPrevInFlow()) {
+          prevClass = CharClass::Other;
+        } else {
+          // If the textrun is mapping multiple content flows, we may be able
+          // to find preceding content from there (without having to walk the
+          // potentially more complex frame tree).
+          if (!(mTextRun->GetFlags2() &
+                nsTextFrameUtils::Flags::IsSimpleFlow)) {
+            prevClass = GetPrecedingCharClassFromMappedFlows(mFrame, mTextRun);
+          }
+          // If we were unable to find any relevant class, just set it to Other;
+          // no autospacing will apply.
+          if (prevClass == CharClass::CombiningMark) {
+            prevClass = CharClass::Other;
+          }
+        }
       }
     }
+
     while (run.NextRun()) {
       uint32_t runOffsetInSubstring = run.GetSkippedOffset() - aRange.start;
       gfxSkipCharsIterator iter = run.GetPos();
