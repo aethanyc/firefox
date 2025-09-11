@@ -3919,6 +3919,67 @@ static TextAutospace::CharClass GetPrecedingCharClassFromMappedFlows(
   return charClass;
 }
 
+// Look for the autospacing class of content preceding the given frame,
+// or return Other if nothing can be found.
+TextAutospace::CharClass GetPrecedingCharClassFromFrameTree(
+    const nsIFrame* aFrame) {
+  using CharClass = TextAutospace::CharClass;
+  while (!aFrame->GetPrevSibling() && aFrame->GetParent()->IsInlineFrame()) {
+    // If this is the first child of an inline container, we want to ascend to
+    // the parent and look at what precedes it.
+    aFrame = aFrame->GetParent();
+  }
+  aFrame = aFrame->GetPrevSibling();
+  while (aFrame) {
+    if (aFrame->IsPlaceholderFrame()) {
+      // Skip over out-of-flow placeholders.
+      aFrame = aFrame->GetPrevSibling();
+      continue;
+    }
+    if (aFrame->IsInlineFrame()) {
+      // Descend into inline containers and go backwards through their content.
+      const auto* inlineFrame = static_cast<const nsInlineFrame*>(aFrame);
+      aFrame = inlineFrame->PrincipalChildList().LastChild();
+      continue;
+    }
+    if (aFrame->IsTextFrame()) {
+      // Look for the class of the last character in the frame. The characters
+      // we actually care about will not have been skipped during whitespace
+      // processing, so we can just look at the text in the DOM without having
+      // to deal with a gfxSkipCharsIterator here.
+      const auto* textFrame = static_cast<const nsTextFrame*>(aFrame);
+      const auto& buffer = textFrame->CharacterDataBuffer();
+      int32_t i = textFrame->GetContentEnd();
+      while (i > textFrame->GetContentOffset()) {
+        char32_t ch = buffer.CharAt(--i);
+        if (NS_IS_LOW_SURROGATE(ch) && i > textFrame->GetContentOffset()) {
+          ch = buffer.ScalarValueAt(--i);
+        }
+        auto cls = TextAutospace::GetCharClass(ch);
+        if (cls == CharClass::CombiningMark) {
+          // Ignore trailing combining marks.
+          continue;
+        }
+        if (cls == CharClass::NonIdeographicLetter ||
+            cls == CharClass::NonIdeographicNumeral) {
+          // If we're in vertical writing mode with forced upright glyph
+          // orientation, these classes are not applicable.
+          if (textFrame->StyleVisibility()->mTextOrientation ==
+                  StyleTextOrientation::Upright ||
+              textFrame->Style()->IsTextCombined()) {
+            cls = CharClass::Other;
+          }
+        }
+        return cls;
+      }
+      aFrame = aFrame->GetPrevSibling();
+      continue;
+    }
+    return CharClass::Other;
+  }
+  return CharClass::Other;
+}
+
 void nsTextFrame::PropertyProvider::GetSpacingInternal(Range aRange,
                                                        Spacing* aSpacing,
                                                        bool aIgnoreTabs) const {
@@ -4005,10 +4066,12 @@ void nsTextFrame::PropertyProvider::GetSpacingInternal(Range aRange,
                 nsTextFrameUtils::Flags::IsSimpleFlow)) {
             prevClass = GetPrecedingCharClassFromMappedFlows(mFrame, mTextRun);
           }
-          // If we were unable to find any relevant class, just set it to Other;
-          // no autospacing will apply.
+          // If we couldn't get it from an earlier flow covered by the textrun,
+          // we'll have to delve into the frame tree to see what preceded this.
+          // This will never return CombiningMark; it will return Other in the
+          // case where it doesn't find anything relevant.
           if (prevClass == CharClass::CombiningMark) {
-            prevClass = CharClass::Other;
+            prevClass = GetPrecedingCharClassFromFrameTree(mFrame);
           }
         }
       }
