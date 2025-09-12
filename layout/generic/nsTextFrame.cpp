@@ -3864,35 +3864,36 @@ static gfxFloat ComputeTabWidthAppUnits(const nsIFrame* aFrame) {
 // content. Because none of the characters of interest will have been collapsed
 // during whitespace processing, we don't actually bother mapping gfxSkipChars,
 // but just look at the underlying DOM text.
-static TextAutospace::CharClass LastNonMarkCharClass(const nsTextFrame* f) {
-  using CharClass = TextAutospace::CharClass;
-  const auto& buffer = f->CharacterDataBuffer();
-  int32_t i = f->GetContentEnd();
-  while (i > f->GetContentOffset()) {
-    char32_t ch = buffer.CharAt(--i);
-    if (NS_IS_LOW_SURROGATE(ch) && i > f->GetContentOffset()) {
-      ch = buffer.ScalarValueAt(--i);
-    }
-    auto charClass = TextAutospace::GetCharClass(ch);
-    if (charClass != CharClass::CombiningMark) {
-      return charClass;
-    }
-  }
-  // If we reached the beginning of the frame, and there's a prev-in-flow,
-  // that means we've encountered a line-break and can return Other.
-  if (f->GetPrevInFlow()) {
-    return CharClass::Other;
-  }
-  // Otherwise, return CombiningMark so the caller will keep iterating.
-  return CharClass::CombiningMark;
-}
+// static TextAutospace::CharClass LastNonMarkCharClass(const nsTextFrame* f) {
+//   using CharClass = TextAutospace::CharClass;
+//   const auto& buffer = f->CharacterDataBuffer();
+//   int32_t i = f->GetContentEnd();
+//   while (i > f->GetContentOffset()) {
+//     char32_t ch = buffer.CharAt(--i);
+//     if (NS_IS_LOW_SURROGATE(ch) && i > f->GetContentOffset()) {
+//       ch = buffer.ScalarValueAt(--i);
+//     }
+//     auto charClass = TextAutospace::GetCharClass(ch);
+//     if (charClass != CharClass::CombiningMark) {
+//       return charClass;
+//     }
+//   }
+//   // If we reached the beginning of the frame, and there's a prev-in-flow,
+//   // that means we've encountered a line-break and can return Other.
+//   if (f->GetPrevInFlow()) {
+//     return CharClass::Other;
+//   }
+//   // Otherwise, return CombiningMark so the caller will keep iterating.
+//   return CharClass::CombiningMark;
+// }
 
 // Look for the autospacing class of the content preceding the given
 // textframe, returning CombiningMark if nothing relevant is found.
+/*
 static TextAutospace::CharClass GetPrecedingCharClassFromMappedFlows(
     const nsTextFrame* aFrame, const gfxTextRun* aTextRun) {
   using CharClass = TextAutospace::CharClass;
-  MOZ_ASSERT(!(mTextRun->GetFlags2() & nsTextFrameUtils::Flags::IsSimpleFlow),
+  MOZ_ASSERT(!(aTextRun->GetFlags2() & nsTextFrameUtils::Flags::IsSimpleFlow),
              "not to be called for simple-flow textruns!");
 
   TextRunMappedFlow* mappedFlows = GetMappedFlows(aTextRun);
@@ -3902,6 +3903,9 @@ static TextAutospace::CharClass GetPrecedingCharClassFromMappedFlows(
   // Search for the current frame in the mapped flows.
   uint32_t i = 0;
   for (; i < data->mMappedFlowCount; ++i) {
+    printf("mappedFlow[%d]: start frame %s\n", i,
+           mappedFlows[i].mStartFrame->ListTag().get());
+
     if (mappedFlows[i].mStartFrame == aFrame) {
       break;
     }
@@ -3918,6 +3922,7 @@ static TextAutospace::CharClass GetPrecedingCharClassFromMappedFlows(
   }
   return charClass;
 }
+*/
 
 // Look for the autospacing class of content preceding the given frame,
 // or return Other if nothing can be found.
@@ -4038,19 +4043,59 @@ void nsTextFrame::PropertyProvider::GetSpacingInternal(Range aRange,
     // Previous non-mark class of a scalar at a cluster start.
     CharClass prevClass = CharClass::CombiningMark;
     if (mTextAutospace) {
+      printf("aRange [%d,%d), original offset %d, skipped offset %d\n",
+             aRange.start, aRange.end, start.GetOriginalOffset(),
+             start.GetSkippedOffset());
+
       // We may need the class of the scalar immediately before the current
       // aRange.
       if (aRange.start > 0 && start.GetOriginalOffset() > 0) {
+        if (!(mTextRun->GetFlags2() & nsTextFrameUtils::Flags::IsSimpleFlow)) {
+          printf("is complex flow\n");
+        } else {
+          printf("is simple flow\n");
+        }
         gfxSkipCharsIterator findPrevCluster = start;
         do {
           findPrevCluster.AdvanceOriginal(-1);
           FindClusterStart(mTextRun, 0, &findPrevCluster);
           const char32_t prevScalar = mCharacterDataBuffer.ScalarValueAt(
               findPrevCluster.GetOriginalOffset());
+
           prevClass = TextAutospace::GetCharClass(prevScalar);
         } while (prevClass == CharClass::CombiningMark &&
                  findPrevCluster.GetOriginalOffset() > 0);
       }
+
+      if (aRange.start > 0 && start.GetOriginalOffset() == 0) {
+        if (!(mTextRun->GetFlags2() & nsTextFrameUtils::Flags::IsSimpleFlow)) {
+          printf("is complex flow\n");
+          TextRunMappedFlow* mappedFlows = GetMappedFlows(mTextRun);
+          auto* data = static_cast<TextRunUserData*>(mTextRun->GetUserData());
+          uint32_t i = 0;
+          for (; i < data->mMappedFlowCount; ++i) {
+            printf("mappedFlow[%d]: start frame %s\n", i,
+                   mappedFlows[i].mStartFrame->ListTag().get());
+            if (mappedFlows[i].mStartFrame == mFrame) {
+              break;
+            }
+          }
+          nsTextFrame* f = mappedFlows[--i].mStartFrame->LastInFlow();
+          gfxSkipCharsIterator iter = f->EnsureTextRun(eInflated);
+          iter.SetSkippedOffset(aRange.start - 1);
+          printf("in prev flow: original offset %d, skip offset %d\n",
+                 iter.GetOriginalOffset(), iter.GetSkippedOffset());
+
+          FindClusterStart(f->GetTextRun(eInflated), 0, &iter);
+          const char32_t prevScalar =
+              f->CharacterDataBuffer().ScalarValueAt(iter.GetOriginalOffset());
+          prevClass = TextAutospace::GetCharClass(prevScalar);
+          printf("prevScalar %X, prevClass %d\n", prevScalar, prevClass);
+        } else {
+          printf("is simple flow\n");
+        }
+      }
+
       // If we didn't find a (non-mark) class, we need to look at the preceding
       // content (if any) to see what it ended with.
       if (prevClass == CharClass::CombiningMark) {
@@ -4064,7 +4109,8 @@ void nsTextFrame::PropertyProvider::GetSpacingInternal(Range aRange,
           // potentially more complex frame tree).
           if (!(mTextRun->GetFlags2() &
                 nsTextFrameUtils::Flags::IsSimpleFlow)) {
-            prevClass = GetPrecedingCharClassFromMappedFlows(mFrame, mTextRun);
+            // prevClass = GetPrecedingCharClassFromMappedFlows(mFrame,
+            // mTextRun);
           }
           // If we couldn't get it from an earlier flow covered by the textrun,
           // we'll have to delve into the frame tree to see what preceded this.
@@ -10090,10 +10136,8 @@ void nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
                              nsReflowStatus& aStatus) {
   MOZ_ASSERT(aStatus.IsEmpty(), "Caller should pass a fresh reflow status!");
 
-#ifdef NOISY_REFLOW
   ListTag(stdout);
   printf(": BeginReflow: availableWidth=%d\n", aAvailableWidth);
-#endif
 
   nsPresContext* presContext = PresContext();
 
@@ -10150,6 +10194,9 @@ void nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
   uint32_t flowEndInTextRun;
   nsIFrame* lineContainer = aLineLayout.LineContainerFrame();
   const auto& characterDataBuffer = CharacterDataBuffer();
+
+  printf("%s: lineContainer %s\n", ListTag().get(),
+         lineContainer->ListTag().get());
 
   // DOM offsets of the text range we need to measure, after trimming
   // whitespace, restricting to first-letter, and restricting preformatted text
