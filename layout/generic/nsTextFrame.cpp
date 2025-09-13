@@ -3919,17 +3919,58 @@ void nsTextFrame::PropertyProvider::GetSpacingInternal(Range aRange,
     Maybe<CharClass> prevClass;
     if (mTextAutospace) {
       // We may need the class of the scalar immediately before the current
-      // aRange.
-      if (aRange.start > 0 && start.GetOriginalOffset() > 0) {
-        gfxSkipCharsIterator findPrevCluster = start;
-        do {
-          findPrevCluster.AdvanceOriginal(-1);
-          FindClusterStart(mTextRun, 0, &findPrevCluster);
-          const char32_t prevScalar = mCharacterDataBuffer.ScalarValueAt(
-              findPrevCluster.GetOriginalOffset());
-          prevClass = Some(TextAutospace::GetCharClass(prevScalar));
-        } while (*prevClass == CharClass::CombiningMark &&
-                 findPrevCluster.GetOriginalOffset() > 0);
+      // aRange. However, if mFrame has a a prev-in-flow, it is after a
+      // line-break, no need to apply autospace.
+      if (aRange.start > 0) {
+        printf("aRange start %d, end %d\n", aRange.start, aRange.end);
+        gfxSkipCharsIterator findPrevCluster;
+        gfxTextRun* textRun;
+        const dom::CharacterDataBuffer* buffer;
+        if (start.GetOriginalOffset() > 0) {
+          findPrevCluster = start;
+          textRun = mTextRun;
+          buffer = &mCharacterDataBuffer;
+        } else if (mFrame->GetPrevInFlow()) {
+          // If we have a prev-in-flow, we're after a line-break, so autospace
+          // does not apply across continuation boundaries. Do nothing to keep
+          // prevClass Nothing().
+        } else if (!(mTextRun->GetFlags2() &
+                     nsTextFrameUtils::Flags::IsSimpleFlow)) {
+          // If the textrun is mapping multiple content flows, we may be able to
+          // find preceding content from the previous text frame (without having
+          // to walk the potentially more complex frame tree).
+          TextRunMappedFlow* mappedFlows = GetMappedFlows(mTextRun);
+          auto* data = static_cast<TextRunUserData*>(mTextRun->GetUserData());
+          uint32_t i = 0;
+          for (; i < data->mMappedFlowCount; ++i) {
+            if (mappedFlows[i].mStartFrame == mFrame) {
+              break;
+            }
+          }
+          MOZ_ASSERT(mappedFlows[i].mStartFrame == mFrame,
+                     "Current frame not found in the mapped flows!");
+          if (i > 0) {
+            nsTextFrame* prevFrame = mappedFlows[--i].mStartFrame->LastInFlow();
+            findPrevCluster = prevFrame->EnsureTextRun(nsTextFrame::eInflated);
+            printf("prevFrame %s\n", prevFrame->ListTag().get());
+            findPrevCluster.SetSkippedOffset(aRange.start);
+            textRun = prevFrame->GetTextRun(nsTextFrame::eInflated);
+            buffer = &prevFrame->CharacterDataBuffer();
+          }
+        }
+        if (findPrevCluster.IsInitialized()) {
+          while (findPrevCluster.GetOriginalOffset() > 0) {
+            findPrevCluster.AdvanceOriginal(-1);
+            FindClusterStart(textRun, 0, &findPrevCluster);
+            const char32_t prevScalar =
+                buffer->ScalarValueAt(findPrevCluster.GetOriginalOffset());
+            prevClass = Some(TextAutospace::GetCharClass(prevScalar));
+            printf("prevScalar %X, class %d\n", prevScalar, *prevClass);
+            if (*prevClass != CharClass::CombiningMark) {
+              break;
+            }
+          }
+        }
       } else {
         // Bug 1986837: Look for the last non-mark cluster start of the
         // preceding frame, if any.
@@ -9948,10 +9989,8 @@ void nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
                              nsReflowStatus& aStatus) {
   MOZ_ASSERT(aStatus.IsEmpty(), "Caller should pass a fresh reflow status!");
 
-#ifdef NOISY_REFLOW
   ListTag(stdout);
   printf(": BeginReflow: availableWidth=%d\n", aAvailableWidth);
-#endif
 
   nsPresContext* presContext = PresContext();
 
