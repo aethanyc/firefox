@@ -3959,13 +3959,17 @@ void nsTextFrame::PropertyProvider::GetSpacingInternal(Range aRange,
           }
         }
         if (findPrevCluster.IsInitialized()) {
+          printf("before while loop: orig offset %d, skipped offset %d\n",
+                 findPrevCluster.GetOriginalOffset(),
+                 findPrevCluster.GetSkippedOffset());
           while (findPrevCluster.GetOriginalOffset() > 0) {
             findPrevCluster.AdvanceOriginal(-1);
             FindClusterStart(textRun, 0, &findPrevCluster);
             const char32_t prevScalar =
                 buffer->ScalarValueAt(findPrevCluster.GetOriginalOffset());
             prevClass = Some(TextAutospace::GetCharClass(prevScalar));
-            printf("prevScalar %X, class %d\n", prevScalar, *prevClass);
+            printf("prevScalar %X, class %d, orig offset %d\n", prevScalar,
+                   *prevClass, findPrevCluster.GetOriginalOffset());
             if (*prevClass != CharClass::CombiningMark) {
               break;
             }
