@@ -3877,6 +3877,24 @@ static Maybe<TextAutospace::CharClass> LastNonMarkCharClass(
   return Nothing();
 }
 
+static Maybe<TextAutospace::CharClass> LastNonMarkCharClassInFrame(
+    nsTextFrame* aFrame) {
+  using CharClass = TextAutospace::CharClass;
+  gfxSkipCharsIterator iter = aFrame->EnsureTextRun(nsTextFrame::eInflated);
+  iter.SetOriginalOffset(aFrame->GetContentEnd());
+  Maybe<CharClass> prevClass =
+      LastNonMarkCharClass(iter, aFrame->GetTextRun(nsTextFrame::eInflated),
+                           aFrame->CharacterDataBuffer());
+  if (prevClass) {
+    return prevClass;
+  }
+  if (aFrame->GetPrevInFlow()) {
+    // If aFrame has a prev-in-flow, it is after a line-break, so autospace does
+    // not apply here; just return Other.
+    return Some(CharClass::Other);
+  }
+}
+
 // Look for the autospace class of the content preceding the given textframe
 // from the mapped flows.
 static Maybe<TextAutospace::CharClass> GetPrecedingCharClassFromMappedFlows(
