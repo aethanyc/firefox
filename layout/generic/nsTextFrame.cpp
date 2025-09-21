@@ -4132,8 +4132,10 @@ void nsTextFrame::PropertyProvider::GetSpacingInternal(Range aRange,
             // We don't need to do anything if at start of line, or if the
             // current class is `Other`, which never participates in spacing.
             if (!atStart && currClass != CharClass::Other &&
-                mTextAutospace->ShouldApplySpacing(
-                    prevClass.valueOr(findPrecedingClass()), currClass)) {
+                mTextAutospace->ShouldApplySpacing(prevClass.valueOrFrom([&]() {
+                  return findPrecedingClass();
+                }),
+                                                   currClass)) {
               aSpacing[runOffsetInSubstring + i].mBefore +=
                   mTextAutospace->InterScriptSpacing();
             }
