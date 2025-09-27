@@ -9364,7 +9364,7 @@ nscoord nsGridContainerFrame::ReflowChildren(GridReflowInput& aGridRI,
       // The IsGridContainerCB flag tells AbsoluteContainingBlock::Reflow to
       // use those instead.
       nsRect dummyRect;
-      AbsPosReflowFlags flags{AbsPosReflowFlag::ConstrainHeight,
+      AbsPosReflowFlags flags{AbsPosReflowFlag::AllowFragmentation,
                               AbsPosReflowFlag::CBWidthChanged,
                               AbsPosReflowFlag::CBHeightChanged,
                               AbsPosReflowFlag::IsGridContainerCB};
