@@ -153,7 +153,6 @@ using namespace mozilla::dom;
 using namespace mozilla::gfx;
 using namespace mozilla::layers;
 using namespace mozilla::layout;
-typedef nsAbsoluteContainingBlock::AbsPosReflowFlags AbsPosReflowFlags;
 using nsStyleTransformMatrix::TransformReferenceBox;
 
 nsIFrame* nsILineIterator::LineInfo::GetLastFrameOnLine() const {
@@ -7479,9 +7478,9 @@ void nsIFrame::ReflowAbsoluteFrames(nsPresContext* aPresContext,
                  "Abs-pos children only supported on container frames for now");
 
     nsRect containingBlock(0, 0, containingBlockWidth, containingBlockHeight);
-    AbsPosReflowFlags flags =
-        AbsPosReflowFlags::CBWidthAndHeightChanged |  // XXX could be optimized
-        AbsPosReflowFlags::ConstrainHeight;
+    AbsPosReflowFlags flags{AbsPosReflowFlag::ConstrainHeight,
+                            AbsPosReflowFlag::CBWidthChanged,
+                            AbsPosReflowFlag::CBHeightChanged};
     absoluteContainer->Reflow(container, aPresContext, aReflowInput, aStatus,
                               containingBlock, flags,
                               &aDesiredSize.mOverflowAreas);
