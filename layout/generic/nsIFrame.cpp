@@ -7478,7 +7478,7 @@ void nsIFrame::ReflowAbsoluteFrames(nsPresContext* aPresContext,
                  "Abs-pos children only supported on container frames for now");
 
     nsRect containingBlock(0, 0, containingBlockWidth, containingBlockHeight);
-    AbsPosReflowFlags flags{AbsPosReflowFlag::ConstrainHeight,
+    AbsPosReflowFlags flags{AbsPosReflowFlag::AllowSplitting,
                             AbsPosReflowFlag::CBWidthChanged,
                             AbsPosReflowFlag::CBHeightChanged};
     absoluteContainer->Reflow(container, aPresContext, aReflowInput, aStatus,
