@@ -244,8 +244,8 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
         // XXXfr This is a hack to fix some of our printing dataloss.
         // See bug 154892. Not sure how to do it "right" yet; probably want
         // to keep continuations within an AbsoluteContainingBlock eventually.
-        tracker.Insert(nextFrame, kidStatus);
-        reflowStatus.MergeCompletionStatusFrom(kidStatus);
+        // tracker.Insert(nextFrame, kidStatus);
+        // reflowStatus.MergeCompletionStatusFrom(kidStatus);
       } else if (nextFrame) {
         // Delete any continuations
         nsOverflowContinuationTracker::AutoFinish fini(&tracker, kidFrame);
