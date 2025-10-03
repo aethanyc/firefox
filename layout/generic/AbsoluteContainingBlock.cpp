@@ -694,9 +694,9 @@ static nscoord OffsetToAlignedStaticPos(
 }
 
 void AbsoluteContainingBlock::ResolveSizeDependentOffsets(
-    nsPresContext* aPresContext, ReflowInput& aKidReflowInput,
+    ReflowInput& aKidReflowInput, const LogicalSize& aLogicalCBSize,
     const LogicalSize& aKidSize, const LogicalMargin& aMargin,
-    LogicalMargin* aOffsets, LogicalSize* aLogicalCBSize) {
+    LogicalMargin* aOffsets) {
   WritingMode wm = aKidReflowInput.GetWritingMode();
   WritingMode outerWM = aKidReflowInput.mParentReflowInput->GetWritingMode();
 
@@ -713,15 +713,10 @@ void AbsoluteContainingBlock::ResolveSizeDependentOffsets(
       (NS_AUTOOFFSET == aOffsets->BStart(outerWM)) ||
       aKidReflowInput.mFlags.mIOffsetsNeedCSSAlign ||
       aKidReflowInput.mFlags.mBOffsetsNeedCSSAlign) {
-    if (-1 == aLogicalCBSize->ISize(wm)) {
-      // Get the containing block width/height
-      const ReflowInput* parentRI = aKidReflowInput.mParentReflowInput;
-      *aLogicalCBSize = aKidReflowInput.ComputeContainingBlockRectangle(
-          aPresContext, parentRI);
-    }
-
+    NS_ASSERTION(aLogicalCBSize.ISize(wm) != NS_UNCONSTRAINEDSIZE,
+                 "Inline-size of the containing block should be constrained!");
     const LogicalSize logicalCBSizeOuterWM =
-        aLogicalCBSize->ConvertTo(outerWM, wm);
+        aLogicalCBSize.ConvertTo(outerWM, wm);
 
     // placeholderContainer is used in each of the m{I,B}OffsetsNeedCSSAlign
     // clauses. We declare it at this scope so we can avoid having to look
@@ -1055,8 +1050,8 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
 
       // If we're solving for start in either inline or block direction,
       // then compute it now that we know the dimensions.
-      ResolveSizeDependentOffsets(aPresContext, kidReflowInput, kidSize, margin,
-                                  &offsets, &logicalCBSize);
+      ResolveSizeDependentOffsets(kidReflowInput, logicalCBSize, kidSize,
+                                  margin, &offsets);
 
       if (kidReflowInput.mFlags.mDeferAutoMarginComputation) {
         ResolveAutoMarginsAfterLayout(kidReflowInput, &logicalCBSize, kidSize,
