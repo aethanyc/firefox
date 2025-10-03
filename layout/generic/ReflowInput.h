@@ -701,6 +701,12 @@ struct ReflowInput : public SizeComputationInput {
 
   static constexpr float kNormalLineHeightFactor = 1.2f;
 
+  /**
+   * Compute the content-box rect of the containing block frame in mFrame's
+   * writing-mode (mWritingMode).
+   *
+   * Note: the block-size in the return value may be unconstrained.
+   */
   LogicalSize ComputeContainingBlockRectangle(
       nsPresContext* aPresContext, const ReflowInput* aContainingBlockRI) const;
 
