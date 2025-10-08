@@ -405,19 +405,26 @@ WritingMode ReflowInput::GetCBWritingMode() const {
                         : mFrame->GetContainingBlock()->GetWritingMode();
 }
 
+nsSize ReflowInput::BorderBoxSizeAsContainerIfConstrained(
+    WritingMode aWM, const LogicalSize& aContentBoxSize,
+    const LogicalMargin& aBorderPadding) {
+  LogicalSize size = aContentBoxSize;
+  if (size.ISize(aWM) == NS_UNCONSTRAINEDSIZE) {
+    size.ISize(aWM) = 0;
+  } else {
+    size.ISize(aWM) += aBorderPadding.IStartEnd(aWM);
+  }
+  if (size.BSize(aWM) == NS_UNCONSTRAINEDSIZE) {
+    size.BSize(aWM) = 0;
+  } else {
+    size.BSize(aWM) += aBorderPadding.BStartEnd(aWM);
+  }
+  return size.GetPhysicalSize(aWM);
+}
+
 nsSize ReflowInput::ComputedSizeAsContainerIfConstrained() const {
-  LogicalSize size = ComputedSize();
-  if (size.ISize(mWritingMode) == NS_UNCONSTRAINEDSIZE) {
-    size.ISize(mWritingMode) = 0;
-  } else {
-    size.ISize(mWritingMode) += mComputedBorderPadding.IStartEnd(mWritingMode);
-  }
-  if (size.BSize(mWritingMode) == NS_UNCONSTRAINEDSIZE) {
-    size.BSize(mWritingMode) = 0;
-  } else {
-    size.BSize(mWritingMode) += mComputedBorderPadding.BStartEnd(mWritingMode);
-  }
-  return size.GetPhysicalSize(mWritingMode);
+  return BorderBoxSizeAsContainerIfConstrained(mWritingMode, ComputedSize(),
+                                               mComputedBorderPadding);
 }
 
 bool ReflowInput::ShouldReflowAllKids() const {
@@ -1423,10 +1430,8 @@ void ReflowInput::CalculateHypotheticalPosition(
   // Get the placeholder offset in the coordinate space of its containing block.
   // XXXbz the placeholder is not fully reflowed yet if our containing block is
   // relatively positioned...
-  nsSize cbSize =
-      containingBlock->HasAnyStateBits(NS_FRAME_IN_REFLOW)
-          ? aAbsCBReflowInput->ComputedSizeAsContainerIfConstrained()
-          : containingBlock->GetSize();
+  const nsSize cbSize = BorderBoxSizeAsContainerIfConstrained(
+      cbwm, cbContentBoxSize, cbBorderPadding);
   LogicalPoint placeholderOffset(
       cbwm, aPlaceholderFrame->GetOffsetToIgnoringScrolling(containingBlock),
       cbSize);
