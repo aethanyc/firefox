@@ -1423,10 +1423,12 @@ void ReflowInput::CalculateHypotheticalPosition(
   // Get the placeholder offset in the coordinate space of its containing block.
   // XXXbz the placeholder is not fully reflowed yet if our containing block is
   // relatively positioned...
-  nsSize cbSize =
-      containingBlock->HasAnyStateBits(NS_FRAME_IN_REFLOW)
-          ? aAbsCBReflowInput->ComputedSizeAsContainerIfConstrained()
-          : containingBlock->GetSize();
+  const LogicalSize cbSizeConstrained(
+      cbwm, cbContentBoxSize.ISize(cbwm) + cbBorderPadding.IStartEnd(cbwm),
+      cbContentBoxSize.BSize(cbwm) == NS_UNCONSTRAINEDSIZE
+          ? 0
+          : cbContentBoxSize.BSize(cbwm) + cbBorderPadding.BStartEnd(cbwm));
+  const nsSize cbSize = cbSizeConstrained.GetPhysicalSize(cbwm);
   LogicalPoint placeholderOffset(
       cbwm, aPlaceholderFrame->GetOffsetToIgnoringScrolling(containingBlock),
       cbSize);
