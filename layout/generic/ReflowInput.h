@@ -365,6 +365,12 @@ struct ReflowInput : public SizeComputationInput {
     mComputedOffsets = aOffsets.ConvertTo(mWritingMode, aWM);
   }
 
+  // Return the physical border-box size by adding aContentBoxSize and
+  // aBorderPadding, with unconstrained dimensions replaced by zero.
+  static nsSize BorderBoxSizeAsContainerIfConstrained(
+      WritingMode aWM, const LogicalSize& aContentBoxSize,
+      const LogicalMargin& aBorderPadding);
+
   // Return ReflowInput's computed size including border-padding, with
   // unconstrained dimensions replaced by zero.
   nsSize ComputedSizeAsContainerIfConstrained() const;
