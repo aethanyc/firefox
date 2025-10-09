@@ -1351,6 +1351,7 @@ static bool BlockPolarityFlipped(WritingMode aThisWm, WritingMode aOtherWm) {
 // placeholder frame, which may be different from the absolute containing block.
 void ReflowInput::CalculateHypotheticalPosition(
     nsPlaceholderFrame* aPlaceholderFrame, const ReflowInput* aAbsCBReflowInput,
+    const LogicalSize& aAbsCBPaddingBoxSize,
     nsHypotheticalPosition& aHypotheticalPos) const {
   NS_ASSERTION(mStyleDisplay->mOriginalDisplay != StyleDisplay::None,
                "mOriginalDisplay has not been properly initialized");
@@ -1549,6 +1550,7 @@ void ReflowInput::CalculateHypotheticalPosition(
   const nsIFrame* absContainingBlock = aAbsCBReflowInput->mFrame;
   nsPoint absCBOffset =
       containingBlock->GetOffsetToIgnoringScrolling(absContainingBlock);
+  nsSize absCBSize;
   if (absContainingBlock->IsViewportFrame()) {
     // When the containing block is the ViewportFrame, i.e. we are calculating
     // the static position for a fixed-positioned frame, we need to adjust the
@@ -1565,9 +1567,14 @@ void ReflowInput::CalculateHypotheticalPosition(
       const nsMargin scrollbarSizes = sf->GetActualScrollbarSizes();
       absCBOffset.MoveBy(-scrollbarSizes.left, -scrollbarSizes.top);
     }
+
+    // ViewportFrame has no border or padding, so padding-box size is equal to
+    // the border-box size (absCBSize) that we are computing.
+    absCBSize = aAbsCBPaddingBoxSize.GetPhysicalSize(absCBWM);
+  } else {
+    absCBSize = aAbsCBReflowInput->ComputedSizeAsContainerIfConstrained();
   }
 
-  nsSize absCBSize = aAbsCBReflowInput->ComputedSizeAsContainerIfConstrained();
   LogicalPoint logCBOffs(cbwm, absCBOffset, absCBSize - cbSize);
   aHypotheticalPos.mIStart += logCBOffs.I(cbwm);
   aHypotheticalPos.mBStart += logCBOffs.B(cbwm);
@@ -1738,7 +1745,7 @@ void ReflowInput::InitAbsoluteConstraints(const ReflowInput* aCBReflowInput,
       }
     } else {
       // XXXmats all this is broken for orthogonal writing-modes: bug 1521988.
-      CalculateHypotheticalPosition(placeholderFrame, aCBReflowInput,
+      CalculateHypotheticalPosition(placeholderFrame, aCBReflowInput, aCBSize,
                                     hypotheticalPos);
       if (aCBReflowInput->mFrame->IsGridContainerFrame()) {
         // 'hypotheticalPos' is relative to the padding rect of the CB *frame*.
