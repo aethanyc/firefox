@@ -1351,6 +1351,7 @@ static bool BlockPolarityFlipped(WritingMode aThisWm, WritingMode aOtherWm) {
 // placeholder frame, which may be different from the absolute containing block.
 void ReflowInput::CalculateHypotheticalPosition(
     nsPlaceholderFrame* aPlaceholderFrame, const ReflowInput* aAbsCBReflowInput,
+    const LogicalSize& aAbsCBPaddingBoxSize,
     nsHypotheticalPosition& aHypotheticalPos) const {
   NS_ASSERTION(mStyleDisplay->mOriginalDisplay != StyleDisplay::None,
                "mOriginalDisplay has not been properly initialized");
@@ -1567,7 +1568,10 @@ void ReflowInput::CalculateHypotheticalPosition(
     }
   }
 
-  nsSize absCBSize = aAbsCBReflowInput->ComputedSizeAsContainerIfConstrained();
+  const nsSize absCBSize =
+      (aAbsCBPaddingBoxSize +
+       aAbsCBReflowInput->ComputedLogicalBorder(absCBWM).Size(absCBWM))
+          .GetPhysicalSize(absCBWM);
   LogicalPoint logCBOffs(cbwm, absCBOffset, absCBSize - cbSize);
   aHypotheticalPos.mIStart += logCBOffs.I(cbwm);
   aHypotheticalPos.mBStart += logCBOffs.B(cbwm);
@@ -1738,7 +1742,7 @@ void ReflowInput::InitAbsoluteConstraints(const ReflowInput* aCBReflowInput,
       }
     } else {
       // XXXmats all this is broken for orthogonal writing-modes: bug 1521988.
-      CalculateHypotheticalPosition(placeholderFrame, aCBReflowInput,
+      CalculateHypotheticalPosition(placeholderFrame, aCBReflowInput, aCBSize,
                                     hypotheticalPos);
       if (aCBReflowInput->mFrame->IsGridContainerFrame()) {
         // 'hypotheticalPos' is relative to the padding rect of the CB *frame*.
