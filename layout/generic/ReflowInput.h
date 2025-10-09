@@ -872,16 +872,17 @@ struct ReflowInput : public SizeComputationInput {
   // (i.e., positioned statically).
   //
   // The position of the hypothetical box is relative to the padding edge of the
-  // absolute containing block (aCBReflowInput->mFrame). The writing mode of the
-  // hypothetical box will have the same block direction as the absolute
+  // absolute containing block (aAbsCBReflowInput->mFrame). The writing mode of
+  // the hypothetical box will have the same block direction as the absolute
   // containing block, but it may differ in the inline direction.
   //
   // FIXME: Bug 1983345. We should update this function to use the customized
-  // containing block rect (if any), instead of using |aCBReflowInput| to
+  // containing block rect (if any), instead of using |aAbsCBReflowInput| to
   // calculate everything. Perhaps we could update
   // ReflowInput::mContainingBlockSize earlier and use it in this function.
   void CalculateHypotheticalPosition(
-      nsPlaceholderFrame* aPlaceholderFrame, const ReflowInput* aCBReflowInput,
+      nsPlaceholderFrame* aPlaceholderFrame,
+      const ReflowInput* aAbsCBReflowInput,
       nsHypotheticalPosition& aHypotheticalPos) const;
 
   void InitAbsoluteConstraints(const ReflowInput* aCBReflowInput,
