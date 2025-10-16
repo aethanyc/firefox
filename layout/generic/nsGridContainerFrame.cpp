@@ -7843,33 +7843,32 @@ LogicalSize nsGridContainerFrame::GridReflowInput::PercentageBasisFor(
     MOZ_ASSERT(itemParent->IsGridContainerFrame());
     auto* subgridFrame = static_cast<const nsGridContainerFrame*>(itemParent);
     MOZ_ASSERT(subgridFrame->IsSubgrid());
-    if (auto* uts = subgridFrame->GetUsedTrackSizes()) {
-      auto subgridWM = subgridFrame->GetWritingMode();
-      LogicalSize cbSize(subgridWM, NS_UNCONSTRAINEDSIZE, NS_UNCONSTRAINEDSIZE);
-      if (!subgridFrame->IsColSubgrid() &&
-          uts->mCanResolveLineRangeSize[LogicalAxis::Inline]) {
-        // NOTE: At this point aGridItem.mArea is in this->mFrame coordinates
-        // and thus may have been transposed.  The range values in a non-
-        // subgridded axis still has its original values in subgridFrame's
-        // coordinates though.
-        auto rangeAxis = subgridWM.IsOrthogonalTo(mWM) ? LogicalAxis::Block
-                                                       : LogicalAxis::Inline;
-        const auto& range = aGridItem.mArea.LineRangeForAxis(rangeAxis);
-        cbSize.ISize(subgridWM) =
-            range.ToLength(uts->mTrackPlans[LogicalAxis::Inline]);
-      }
-      if (!subgridFrame->IsRowSubgrid() &&
-          uts->mCanResolveLineRangeSize[LogicalAxis::Block]) {
-        auto rangeAxis = subgridWM.IsOrthogonalTo(mWM) ? LogicalAxis::Inline
-                                                       : LogicalAxis::Block;
-        const auto& range = aGridItem.mArea.LineRangeForAxis(rangeAxis);
-        cbSize.BSize(subgridWM) =
-            range.ToLength(uts->mTrackPlans[LogicalAxis::Block]);
-      }
-      return cbSize.ConvertTo(wm, subgridWM);
-    }
 
-    return LogicalSize(wm, NS_UNCONSTRAINEDSIZE, NS_UNCONSTRAINEDSIZE);
+    auto subgridWM = subgridFrame->GetWritingMode();
+    LogicalSize cbSize(subgridWM, NS_UNCONSTRAINEDSIZE, NS_UNCONSTRAINEDSIZE);
+    if (!subgridFrame->IsColSubgrid()) {
+      // NOTE: At this point aGridItem.mArea is in this->mFrame coordinates
+      // and thus may have been transposed.  The range values in a non-
+      // subgridded axis still has its original values in subgridFrame's
+      // coordinates though.
+      auto rangeAxis = subgridWM.IsOrthogonalTo(mWM) ? LogicalAxis::Block
+                                                     : LogicalAxis::Inline;
+      const auto& range = aGridItem.mArea.LineRangeForAxis(rangeAxis);
+      const Tracks& track = TracksFor(rangeAxis);
+      if (track.mCanResolveLineRangeSize) {
+        cbSize.ISize(subgridWM) = track.ResolveSize(range);
+      }
+    }
+    if (!subgridFrame->IsRowSubgrid()) {
+      auto rangeAxis = subgridWM.IsOrthogonalTo(mWM) ? LogicalAxis::Inline
+                                                     : LogicalAxis::Block;
+      const auto& range = aGridItem.mArea.LineRangeForAxis(rangeAxis);
+      const Tracks& track = TracksFor(rangeAxis);
+      if (track.mCanResolveLineRangeSize) {
+        cbSize.BSize(subgridWM) = track.ResolveSize(range);
+      }
+    }
+    return cbSize.ConvertTo(wm, subgridWM);
   }
 
   if (StaticPrefs::layout_css_grid_multi_pass_track_sizing_enabled()) {
@@ -9518,6 +9517,8 @@ void nsGridContainerFrame::Reflow(nsPresContext* aPresContext,
     nscoord bSizeForResolvingRowSizes = ComputeBSizeForResolvingRowSizes(
         gridRI, computedBSize, containIntrinsicBSize);
 
+    GRID_LOG("bSizeForResolvingRowSizes %d", bSizeForResolvingRowSizes);
+
     // Resolve the row sizes with the determined bSizeForResolvingRowSizes.
     // 12.1.2: https://drafts.csswg.org/css-grid-2/#algo-grid-sizing
     //
@@ -9528,6 +9529,9 @@ void nsGridContainerFrame::Reflow(nsPresContext* aPresContext,
     gridRI.CalculateTrackSizesForAxis(LogicalAxis::Block, grid,
                                       bSizeForResolvingRowSizes,
                                       SizingConstraint::NoConstraint);
+    GRID_LOG("after the first pass:");
+    // gridRI.mCols.Dump();
+    // gridRI.mRows.Dump();
 
     if (StaticPrefs::layout_css_grid_multi_pass_track_sizing_enabled()) {
       // Invalidate the column sizes before re-resolving them.
@@ -9561,6 +9565,10 @@ void nsGridContainerFrame::Reflow(nsPresContext* aPresContext,
         gridRI.CalculateTrackSizesForAxis(LogicalAxis::Block, grid,
                                           bSizeForResolvingRowSizes,
                                           SizingConstraint::NoConstraint);
+
+        GRID_LOG("after the second pass:");
+        // gridRI.mCols.Dump();
+        // gridRI.mRows.Dump();
       }
     }
 
