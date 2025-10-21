@@ -2987,6 +2987,7 @@ void nsFlexContainerFrame::BuildDisplayList(nsDisplayListBuilder* aBuilder,
 
   if (GetPrevInFlow()) {
     DisplayOverflowContainers(aBuilder, tempLists);
+    DisplayAbsoluteFrames(aBuilder, aLists);
   }
 
   // Our children are all block-level, so their borders/backgrounds all go on
