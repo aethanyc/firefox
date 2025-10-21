@@ -12,6 +12,7 @@
 #include "mozilla/AbsoluteContainingBlock.h"
 
 #include "AnchorPositioningUtils.h"
+#include "mozilla/Assertions.h"
 #include "mozilla/CSSAlignUtils.h"
 #include "mozilla/PresShell.h"
 #include "mozilla/ReflowInput.h"
@@ -105,6 +106,10 @@ void AbsoluteContainingBlock::RemoveFrame(FrameDestroyContext& aContext,
   mAbsoluteFrames.DestroyFrame(aContext, aOldFrame);
 }
 
+nsFrameList AbsoluteContainingBlock::StealPushedChildList() {
+  return std::move(mPushedAbsoluteFrames);
+}
+
 static void MaybeMarkAncestorsAsHavingDescendantDependentOnItsStaticPos(
     nsIFrame* aFrame, nsIFrame* aContainingBlockFrame) {
   MOZ_ASSERT(aFrame->HasAnyStateBits(NS_FRAME_OUT_OF_FLOW));
@@ -170,12 +175,24 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
     aOverflowAreas = nullptr;
   }
 
+  if (nsIFrame* prevDelegatingFrame = aDelegatingFrame->GetPrevInFlow()) {
+    AbsoluteContainingBlock* prevAbsCB =
+        prevDelegatingFrame->GetAbsoluteContainingBlock();
+
+    // Prepend the pushed child list from the previous absCB to our child list.
+    // XXX: Does the frame order matter?
+    nsFrameList prevPushedFrames = prevAbsCB->StealPushedChildList();
+    if (prevPushedFrames.NotEmpty()) {
+      mAbsoluteFrames.InsertFrames(aDelegatingFrame, nullptr,
+                                   std::move(prevPushedFrames));
+    }
+  }
+
   nsReflowStatus reflowStatus;
   const bool reflowAll = aReflowInput.ShouldReflowAllKids();
   const bool cbWidthChanged = aFlags.contains(AbsPosReflowFlag::CBWidthChanged);
   const bool cbHeightChanged =
       aFlags.contains(AbsPosReflowFlag::CBHeightChanged);
-  nsOverflowContinuationTracker tracker(aDelegatingFrame, true);
   for (nsIFrame* kidFrame : mAbsoluteFrames) {
     AnchorPosReferenceData* anchorPosReferenceData = nullptr;
     if (kidFrame->HasAnchorPosReference()) {
@@ -233,28 +250,27 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
       MOZ_ASSERT(!kidStatus.IsInlineBreakBefore(),
                  "ShouldAvoidBreakInside should prevent this from happening");
       nsIFrame* nextFrame = kidFrame->GetNextInFlow();
-      if (!kidStatus.IsFullyComplete() &&
-          aDelegatingFrame->CanContainOverflowContainers()) {
+      if (!kidStatus.IsFullyComplete()) {
         // Need a continuation
         if (!nextFrame) {
           nextFrame = aPresContext->PresShell()
                           ->FrameConstructor()
                           ->CreateContinuingFrame(kidFrame, aDelegatingFrame);
+          mPushedAbsoluteFrames.AppendFrame(nullptr, nextFrame);
+        } else {
+          // XXX: Do we need to steal nextFrame and add it to
+          // mPushedAbsoluteFrames?
         }
-        // Add it as an overflow container.
-        // XXXfr This is a hack to fix some of our printing dataloss.
-        // See bug 154892. Not sure how to do it "right" yet; probably want
-        // to keep continuations within an AbsoluteContainingBlock eventually.
-        tracker.Insert(nextFrame, kidStatus);
         reflowStatus.MergeCompletionStatusFrom(kidStatus);
       } else if (nextFrame) {
-        // Delete any continuations
-        nsOverflowContinuationTracker::AutoFinish fini(&tracker, kidFrame);
+        // Delete any continuations in nextFrame's absolute list.
+
+        // XXX: Need to teach DeleteNextInFlowChild() find next-in-flow in
+        // AbsoluteContainingBlock's child list.
         FrameDestroyContext context(aPresContext->PresShell());
         nextFrame->GetParent()->DeleteNextInFlowChild(context, nextFrame, true);
       }
     } else {
-      tracker.Skip(kidFrame, reflowStatus);
       if (aOverflowAreas) {
         aDelegatingFrame->ConsiderChildOverflow(*aOverflowAreas, kidFrame);
       }
@@ -435,6 +451,7 @@ bool AbsoluteContainingBlock::FrameDependsOnContainer(
 
 void AbsoluteContainingBlock::DestroyFrames(DestroyContext& aContext) {
   mAbsoluteFrames.DestroyFrames(aContext);
+  mPushedAbsoluteFrames.DestroyFrames(aContext);
 }
 
 void AbsoluteContainingBlock::MarkSizeDependentFramesDirty() {

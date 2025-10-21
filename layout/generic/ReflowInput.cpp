@@ -1766,6 +1766,9 @@ void ReflowInput::InitAbsoluteConstraints(const ReflowInput* aCBReflowInput,
     }
   }
 
+  printf("hypotheticalPos (%d,%d)\n", hypotheticalPos.mIStart,
+         hypotheticalPos.mBStart);
+
   LogicalMargin offsets(cbwm);
 
   // Handle auto inset values, as per [1].
@@ -1828,6 +1831,9 @@ void ReflowInput::InitAbsoluteConstraints(const ReflowInput* aCBReflowInput,
       mComputeSizeFlags += ComputeSizeFlag::ShrinkWrap;
     }
   }
+
+  printf("before reflow abspos, offset %s\n",
+         ToString(ComputedLogicalOffsets(cbwm)).c_str());
 
   {
     AutoMaybeDisableFontInflation an(mFrame);
@@ -1992,6 +1998,9 @@ void ReflowInput::InitAbsoluteConstraints(const ReflowInput* aCBReflowInput,
                "by InitOffsets.");
     *propValue = margin.GetPhysicalMargin(cbwm);
   }
+
+  printf("after reflow abspos, offset %s\n",
+         ToString(ComputedLogicalOffsets(cbwm)).c_str());
 }
 
 // This will not be converted to abstract coordinates because it's only
@@ -2125,12 +2134,7 @@ static nscoord CalcQuirkContainingBlockHeight(
 
 LogicalSize ReflowInput::ComputeContainingBlockRectangle(
     nsPresContext* aPresContext, const ReflowInput* aContainingBlockRI) const {
-  MOZ_ASSERT(!mFrame->IsAbsolutelyPositioned(mStyleDisplay) ||
-                 // XXX: We have a hack putting abspos continuations in overflow
-                 // container lists (bug 154892), so they are not reflowed by
-                 // AbsoluteContainingBlock until we revisit the abspos
-                 // continuations handling.
-                 mFrame->GetPrevInFlow(),
+  MOZ_ASSERT(!mFrame->IsAbsolutelyPositioned(mStyleDisplay),
              "AbsoluteContainingBlock always provides a containing-block size "
              "when creating ReflowInput for its children!");
 
@@ -2305,6 +2309,13 @@ void ReflowInput::InitConstraints(
     // Calculate the computed inlineSize and blockSize.
     // This varies by frame type.
 
+    if (mFrame->IsAbsolutelyPositioned(mStyleDisplay)) {
+      printf("InitConstraints for %s, is abs-style %s, has prev-in-flow %s, \n",
+             mFrame->ListTag().get(),
+             YesOrNo(mFrame->IsAbsolutelyPositioned(mStyleDisplay)),
+             YesOrNo(mFrame->GetPrevInFlow()));
+    }
+
     if (IsInternalTableFrame()) {
       // Internal table elements. The rules vary depending on the type.
       // Calculate the computed isize
@@ -2362,8 +2373,7 @@ void ReflowInput::InitConstraints(
       mComputedMaxSize.SizeTo(mWritingMode, NS_UNCONSTRAINEDSIZE,
                               NS_UNCONSTRAINEDSIZE);
     } else if (mFrame->IsAbsolutelyPositioned(mStyleDisplay) &&
-               // XXXfr hack for making frames behave properly when in overflow
-               // container lists, see bug 154892; need to revisit later
+               // We only need the absolute constraints for first-in-flow.
                !mFrame->GetPrevInFlow()) {
       InitAbsoluteConstraints(cbri,
                               cbSize.ConvertTo(cbri->GetWritingMode(), wm));
