@@ -105,6 +105,10 @@ void AbsoluteContainingBlock::RemoveFrame(FrameDestroyContext& aContext,
   mAbsoluteFrames.DestroyFrame(aContext, aOldFrame);
 }
 
+nsFrameList AbsoluteContainingBlock::StealPushedChildList() {
+  return std::move(mPushedAbsoluteFrames);
+}
+
 static void MaybeMarkAncestorsAsHavingDescendantDependentOnItsStaticPos(
     nsIFrame* aFrame, nsIFrame* aContainingBlockFrame) {
   MOZ_ASSERT(aFrame->HasAnyStateBits(NS_FRAME_OUT_OF_FLOW));
@@ -170,12 +174,26 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
     aOverflowAreas = nullptr;
   }
 
+  if (nsIFrame* prevDelegatingFrame = aDelegatingFrame->GetPrevInFlow()) {
+    AbsoluteContainingBlock* prevAbsCB =
+        prevDelegatingFrame->GetAbsoluteContainingBlock();
+
+    // Prepend the pushed child list from the previous absCB to our child list.
+    // XXX: Does the frame order matter?
+    nsFrameList prevPushedFrames = prevAbsCB->StealPushedChildList();
+    if (prevPushedFrames.NotEmpty()) {
+      printf("Get prev pushed frames, empty? %s\n",
+             YesOrNo(prevAbsCB->GetPushedChildList().IsEmpty()));
+      mAbsoluteFrames.InsertFrames(aDelegatingFrame, nullptr,
+                                   std::move(prevPushedFrames));
+    }
+  }
+
   nsReflowStatus reflowStatus;
   const bool reflowAll = aReflowInput.ShouldReflowAllKids();
   const bool cbWidthChanged = aFlags.contains(AbsPosReflowFlag::CBWidthChanged);
   const bool cbHeightChanged =
       aFlags.contains(AbsPosReflowFlag::CBHeightChanged);
-  nsOverflowContinuationTracker tracker(aDelegatingFrame, true);
   for (nsIFrame* kidFrame : mAbsoluteFrames) {
     AnchorPosReferenceData* anchorPosReferenceData = nullptr;
     if (kidFrame->HasAnchorPosReference()) {
@@ -233,28 +251,20 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
       MOZ_ASSERT(!kidStatus.IsInlineBreakBefore(),
                  "ShouldAvoidBreakInside should prevent this from happening");
       nsIFrame* nextFrame = kidFrame->GetNextInFlow();
-      if (!kidStatus.IsFullyComplete() &&
-          aDelegatingFrame->CanContainOverflowContainers()) {
+      if (!kidStatus.IsFullyComplete()) {
         // Need a continuation
         if (!nextFrame) {
           nextFrame = aPresContext->PresShell()
                           ->FrameConstructor()
                           ->CreateContinuingFrame(kidFrame, aDelegatingFrame);
         }
-        // Add it as an overflow container.
-        // XXXfr This is a hack to fix some of our printing dataloss.
-        // See bug 154892. Not sure how to do it "right" yet; probably want
-        // to keep continuations within an AbsoluteContainingBlock eventually.
-        tracker.Insert(nextFrame, kidStatus);
+        mPushedAbsoluteFrames.AppendFrame(nullptr, nextFrame);
         reflowStatus.MergeCompletionStatusFrom(kidStatus);
       } else if (nextFrame) {
-        // Delete any continuations
-        nsOverflowContinuationTracker::AutoFinish fini(&tracker, kidFrame);
-        FrameDestroyContext context(aPresContext->PresShell());
-        nextFrame->GetParent()->DeleteNextInFlowChild(context, nextFrame, true);
+        // Delete any continuations in nextFrame's absolute list.
+        // TODO:
       }
     } else {
-      tracker.Skip(kidFrame, reflowStatus);
       if (aOverflowAreas) {
         aDelegatingFrame->ConsiderChildOverflow(*aOverflowAreas, kidFrame);
       }
@@ -435,6 +445,7 @@ bool AbsoluteContainingBlock::FrameDependsOnContainer(
 
 void AbsoluteContainingBlock::DestroyFrames(DestroyContext& aContext) {
   mAbsoluteFrames.DestroyFrames(aContext);
+  mPushedAbsoluteFrames.DestroyFrames(aContext);
 }
 
 void AbsoluteContainingBlock::MarkSizeDependentFramesDirty() {
