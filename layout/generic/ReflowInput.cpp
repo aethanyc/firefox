@@ -2125,12 +2125,7 @@ static nscoord CalcQuirkContainingBlockHeight(
 
 LogicalSize ReflowInput::ComputeContainingBlockRectangle(
     nsPresContext* aPresContext, const ReflowInput* aContainingBlockRI) const {
-  MOZ_ASSERT(!mFrame->IsAbsolutelyPositioned(mStyleDisplay) ||
-                 // XXX: We have a hack putting abspos continuations in overflow
-                 // container lists (bug 154892), so they are not reflowed by
-                 // AbsoluteContainingBlock until we revisit the abspos
-                 // continuations handling.
-                 mFrame->GetPrevInFlow(),
+  MOZ_ASSERT(!mFrame->IsAbsolutelyPositioned(mStyleDisplay),
              "AbsoluteContainingBlock always provides a containing-block size "
              "when creating ReflowInput for its children!");
 
@@ -2362,8 +2357,7 @@ void ReflowInput::InitConstraints(
       mComputedMaxSize.SizeTo(mWritingMode, NS_UNCONSTRAINEDSIZE,
                               NS_UNCONSTRAINEDSIZE);
     } else if (mFrame->IsAbsolutelyPositioned(mStyleDisplay) &&
-               // XXXfr hack for making frames behave properly when in overflow
-               // container lists, see bug 154892; need to revisit later
+               // We only need the absolute constraints for first-in-flow.
                !mFrame->GetPrevInFlow()) {
       InitAbsoluteConstraints(cbri,
                               cbSize.ConvertTo(cbri->GetWritingMode(), wm));
