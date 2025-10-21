@@ -1747,6 +1747,8 @@ void nsBlockFrame::Reflow(nsPresContext* aPresContext, ReflowOutput& aMetrics,
   // children in that situation --- what we think is our "new size" will not be
   // our real new size. This also happens to be more efficient.
   WritingMode parentWM = aMetrics.GetWritingMode();
+  printf("%s: does this frame have abspos children? %s\n", ListTag().get(),
+         YesOrNo(HasAbsolutelyPositionedChildren()));
   if (HasAbsolutelyPositionedChildren()) {
     AbsoluteContainingBlock* absoluteContainer = GetAbsoluteContainingBlock();
     bool haveInterrupt = aPresContext->HasPendingInterrupt();
@@ -1812,9 +1814,13 @@ void nsBlockFrame::Reflow(nsPresContext* aPresContext, ReflowOutput& aMetrics,
       // calculating hypothetical position of absolutely-positioned
       // frames.
       SetupLineCursorForQuery();
+      printf("before calling abs reflow, status %s\n",
+             ToString(reflowStatus).c_str());
       absoluteContainer->Reflow(this, aPresContext, aReflowInput, reflowStatus,
                                 containingBlock, flags,
                                 &aMetrics.mOverflowAreas);
+      printf("after calling abs reflow, status %s\n",
+             ToString(reflowStatus).c_str());
     }
   }
 

@@ -56,6 +56,9 @@ class AbsoluteContainingBlock {
   }
 
   const nsFrameList& GetChildList() const { return mAbsoluteFrames; }
+  const nsFrameList& GetPushedChildList() const {
+    return mPushedAbsoluteFrames;
+  }
 
   void SetInitialChildList(nsIFrame* aDelegatingFrame, FrameChildListID aListID,
                            nsFrameList&& aChildList);
@@ -166,7 +169,8 @@ class AbsoluteContainingBlock {
   void DoMarkFramesDirty(bool aMarkAllDirty);
 
  protected:
-  nsFrameList mAbsoluteFrames;  // additional named child list
+  nsFrameList mAbsoluteFrames;
+  nsFrameList mPushedAbsoluteFrames;
 
 #ifdef DEBUG
   // FrameChildListID::Fixed or FrameChildListID::Absolute
