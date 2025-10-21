@@ -56,6 +56,9 @@ class AbsoluteContainingBlock {
   }
 
   const nsFrameList& GetChildList() const { return mAbsoluteFrames; }
+  const nsFrameList& GetPushedChildList() const {
+    return mPushedAbsoluteFrames;
+  }
 
   void SetInitialChildList(nsIFrame* aDelegatingFrame, FrameChildListID aListID,
                            nsFrameList&& aChildList);
@@ -64,6 +67,12 @@ class AbsoluteContainingBlock {
   void InsertFrames(nsIFrame* aDelegatingFrame, FrameChildListID aListID,
                     nsIFrame* aPrevFrame, nsFrameList&& aFrameList);
   void RemoveFrame(FrameDestroyContext&, FrameChildListID, nsIFrame*);
+
+  /**
+   * Return the pushed absolute frames. The caller is responsible for passing
+   * the ownership of the frames to someone else, or destroying them.
+   */
+  [[nodiscard]] nsFrameList StealPushedChildList();
 
   /**
    * Called by the delegating frame after it has done its reflow first. This
@@ -88,7 +97,9 @@ class AbsoluteContainingBlock {
   using DestroyContext = nsIFrame::DestroyContext;
   void DestroyFrames(DestroyContext&);
 
-  bool HasAbsoluteFrames() const { return mAbsoluteFrames.NotEmpty(); }
+  bool HasAbsoluteFrames() const {
+    return mAbsoluteFrames.NotEmpty() || mPushedAbsoluteFrames.NotEmpty();
+  }
 
   /**
    * Mark our size-dependent absolute frames with NS_FRAME_HAS_DIRTY_CHILDREN
@@ -163,7 +174,8 @@ class AbsoluteContainingBlock {
   void DoMarkFramesDirty(bool aMarkAllDirty);
 
  protected:
-  nsFrameList mAbsoluteFrames;  // additional named child list
+  nsFrameList mAbsoluteFrames;
+  nsFrameList mPushedAbsoluteFrames;
 
 #ifdef DEBUG
   // FrameChildListID::Fixed or FrameChildListID::Absolute
