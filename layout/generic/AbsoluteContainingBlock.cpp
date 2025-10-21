@@ -99,10 +99,24 @@ void AbsoluteContainingBlock::RemoveFrame(FrameDestroyContext& aContext,
                                           FrameChildListID aListID,
                                           nsIFrame* aOldFrame) {
   NS_ASSERTION(mChildListID == aListID, "unexpected child list");
-  if (nsIFrame* nif = aOldFrame->GetNextInFlow()) {
-    nif->GetParent()->DeleteNextInFlowChild(aContext, nif, false);
+  AutoTArray<nsIFrame*, 8> delFrames;
+  for (nsIFrame* f = aOldFrame; f; f = f->GetNextInFlow()) {
+    delFrames.AppendElement(f);
   }
-  mAbsoluteFrames.DestroyFrame(aContext, aOldFrame);
+  for (nsIFrame* delFrame : Reversed(delFrames)) {
+    delFrame->GetParent()->GetAbsoluteContainingBlock()->StealFrame(delFrame);
+    delFrame->Destroy(aContext);
+  }
+}
+
+void AbsoluteContainingBlock::StealFrame(nsIFrame* aFrame) {
+  const bool frameRemoved = mAbsoluteFrames.StartRemoveFrame(aFrame) ||
+                            mPushedAbsoluteFrames.ContinueRemoveFrame(aFrame);
+  MOZ_ASSERT(frameRemoved, "Failed to find aFrame from our child lists!");
+}
+
+nsFrameList AbsoluteContainingBlock::StealPushedChildList() {
+  return std::move(mPushedAbsoluteFrames);
 }
 
 static void MaybeMarkAncestorsAsHavingDescendantDependentOnItsStaticPos(
@@ -204,12 +218,25 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
     aOverflowAreas = nullptr;
   }
 
+  const nsIFrame* prevInFlow = aDelegatingFrame->GetPrevInFlow();
+  if (prevInFlow) {
+    AbsoluteContainingBlock* prevAbsCB =
+        prevInFlow->GetAbsoluteContainingBlock();
+
+    // Prepend the pushed child list from the previous absCB to our child list.
+    // XXX: Does the frame order matter?
+    nsFrameList prevPushedFrames = prevAbsCB->StealPushedChildList();
+    if (prevPushedFrames.NotEmpty()) {
+      mAbsoluteFrames.InsertFrames(aDelegatingFrame, nullptr,
+                                   std::move(prevPushedFrames));
+    }
+  }
+
   nsReflowStatus reflowStatus;
   const bool reflowAll = aReflowInput.ShouldReflowAllKids();
   const bool cbWidthChanged = aFlags.contains(AbsPosReflowFlag::CBWidthChanged);
   const bool cbHeightChanged =
       aFlags.contains(AbsPosReflowFlag::CBHeightChanged);
-  nsOverflowContinuationTracker tracker(aDelegatingFrame, true);
   for (nsIFrame* kidFrame : mAbsoluteFrames) {
     Maybe<AnchorPosResolutionCache> anchorPosResolutionCache;
     if (kidFrame->HasAnchorPosReference()) {
@@ -270,28 +297,28 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
       MOZ_ASSERT(!kidStatus.IsInlineBreakBefore(),
                  "ShouldAvoidBreakInside should prevent this from happening");
       nsIFrame* nextFrame = kidFrame->GetNextInFlow();
-      if (!kidStatus.IsFullyComplete() &&
-          aDelegatingFrame->CanContainOverflowContainers()) {
+      if (!kidStatus.IsFullyComplete()) {
         // Need a continuation
         if (!nextFrame) {
           nextFrame = aPresContext->PresShell()
                           ->FrameConstructor()
                           ->CreateContinuingFrame(kidFrame, aDelegatingFrame);
+          mPushedAbsoluteFrames.AppendFrame(nullptr, nextFrame);
+        } else {
+          if (nextFrame->GetParent() != aDelegatingFrame->GetNextInFlow()) {
+            nextFrame->GetParent()->GetAbsoluteContainingBlock()->StealFrame(
+                nextFrame);
+            mPushedAbsoluteFrames.AppendFrame(nullptr, nextFrame);
+          }
         }
-        // Add it as an overflow container.
-        // XXXfr This is a hack to fix some of our printing dataloss.
-        // See bug 154892. Not sure how to do it "right" yet; probably want
-        // to keep continuations within an AbsoluteContainingBlock eventually.
-        tracker.Insert(nextFrame, kidStatus);
         reflowStatus.MergeCompletionStatusFrom(kidStatus);
       } else if (nextFrame) {
-        // Delete any continuations
-        nsOverflowContinuationTracker::AutoFinish fini(&tracker, kidFrame);
+        // Delete any continuations in nextFrame's absolute list.
         FrameDestroyContext context(aPresContext->PresShell());
-        nextFrame->GetParent()->DeleteNextInFlowChild(context, nextFrame, true);
+        nextFrame->GetParent()->GetAbsoluteContainingBlock()->RemoveFrame(
+            context, FrameChildListID::Absolute, nextFrame);
       }
     } else {
-      tracker.Skip(kidFrame, reflowStatus);
       if (aOverflowAreas) {
         aDelegatingFrame->ConsiderChildOverflow(*aOverflowAreas, kidFrame);
       }
@@ -472,6 +499,7 @@ bool AbsoluteContainingBlock::FrameDependsOnContainer(
 
 void AbsoluteContainingBlock::DestroyFrames(DestroyContext& aContext) {
   mAbsoluteFrames.DestroyFrames(aContext);
+  mPushedAbsoluteFrames.DestroyFrames(aContext);
 }
 
 void AbsoluteContainingBlock::MarkSizeDependentFramesDirty() {
@@ -1230,9 +1258,14 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
         (aKidFrame->GetLogicalRect(cb.mRect.Size()).BStart(wm) <=
          aReflowInput.AvailableBSize());
 
-    // Get the border values
-    const LogicalMargin border =
-        aDelegatingFrame->GetLogicalUsedBorder(outerWM);
+    LogicalMargin border = aDelegatingFrame->GetLogicalUsedBorder(outerWM);
+    if (aDelegatingFrame->GetPrevInFlow()) {
+      LogicalSides skip(outerWM, LogicalSide::BStart);
+      if (aDelegatingFrame->HasAnyStateBits(NS_FRAME_IS_OVERFLOW_CONTAINER)) {
+        skip += LogicalSide::BEnd;
+      }
+      border.ApplySkipSides(skip);
+    }
     const LogicalSize availSize(
         outerWM, cbSize.ISize(outerWM),
         kidFrameMaySplit
@@ -1244,8 +1277,9 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
                                Some(cbSize.ConvertTo(wm, outerWM)), initFlags,
                                {}, {}, aAnchorPosResolutionCache);
 
+    const nsIFrame* kidPrevInFlow = aKidFrame->GetPrevInFlow();
     if (nscoord kidAvailBSize = kidReflowInput.AvailableBSize();
-        kidAvailBSize != NS_UNCONSTRAINEDSIZE) {
+        kidAvailBSize != NS_UNCONSTRAINEDSIZE && !kidPrevInFlow) {
       // Shrink available block-size if it's constrained.
       kidAvailBSize -= kidReflowInput.ComputedLogicalMargin(wm).BStart(wm);
       const nscoord kidOffsetBStart =
@@ -1264,6 +1298,9 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
     // popups, which handle their own positioning.
     if (!aKidFrame->IsMenuPopupFrame()) {
       const LogicalSize kidSize = kidDesiredSize.Size(outerWM);
+
+      // XXX: it seems OK to skip computing offsets and margin for
+      // continuations.
 
       LogicalMargin offsets = kidReflowInput.ComputedLogicalOffsets(outerWM);
       LogicalMargin margin = kidReflowInput.ComputedLogicalMargin(outerWM);
@@ -1360,11 +1397,18 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
             (offsets.BStart(outerWM) + kidMarginBox.BSize(outerWM));
       }
 
-      LogicalRect rect(outerWM,
-                       border.StartOffset(outerWM) +
-                           offsets.StartOffset(outerWM) +
-                           margin.StartOffset(outerWM),
-                       kidSize);
+      LogicalPoint kidPos(outerWM);
+      if (!kidPrevInFlow) {
+        kidPos = border.StartOffset(outerWM) + offsets.StartOffset(outerWM) +
+                 margin.StartOffset(outerWM);
+      } else {
+        kidPos.I(outerWM) = kidPrevInFlow->IStart(
+            outerWM, cbSize.GetPhysicalSize(outerWM) +
+                         border.Size(outerWM).GetPhysicalSize(outerWM));
+        kidPos.B(outerWM) = 0;
+      }
+
+      LogicalRect rect(outerWM, kidPos, kidSize);
       nsRect r = rect.GetPhysicalRect(
           outerWM, cbSize.GetPhysicalSize(outerWM) +
                        border.Size(outerWM).GetPhysicalSize(outerWM));
