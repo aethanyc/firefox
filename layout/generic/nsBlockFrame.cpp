@@ -7797,6 +7797,7 @@ void nsBlockFrame::BuildDisplayList(nsDisplayListBuilder* aBuilder,
 
   if (GetPrevInFlow()) {
     DisplayOverflowContainers(aBuilder, aLists);
+    DisplayAbsoluteFrames(aBuilder, aLists);
     for (nsIFrame* f : GetChildList(FrameChildListID::Float)) {
       if (f->HasAnyStateBits(NS_FRAME_IS_PUSHED_FLOAT)) {
         BuildDisplayListForChild(aBuilder, f, aLists);
