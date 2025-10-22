@@ -283,6 +283,21 @@ class nsContainerFrame : public nsSplittableFrame {
 
   static void PositionChildViews(nsIFrame* aFrame);
 
+  /**
+   * NOTE: aStatus is assumed to be already-initialized. The reflow statuses of
+   * any reflowed absolute children will be merged into aStatus; aside from
+   * that, this method won't modify aStatus.
+   */
+  void ReflowAbsoluteFrames(nsPresContext* aPresContext,
+                            ReflowOutput& aDesiredSize,
+                            const ReflowInput& aReflowInput,
+                            nsReflowStatus& aStatus);
+
+  void FinishReflowWithAbsoluteFrames(nsPresContext* aPresContext,
+                                      ReflowOutput& aDesiredSize,
+                                      const ReflowInput& aReflowInput,
+                                      nsReflowStatus& aStatus);
+
   // ==========================================================================
   /* Overflow containers are continuation frames that hold overflow. They
    * are created when the frame runs out of computed block-size, but still has
