@@ -449,6 +449,12 @@ class nsContainerFrame : public nsSplittableFrame {
                                  const nsDisplayListSet& aLists);
 
   /**
+   * Add absolute child frames to the display list.
+   */
+  void DisplayAbsoluteFrames(nsDisplayListBuilder* aBuilder,
+                             const nsDisplayListSet& aLists);
+
+  /**
    * Builds display lists for the children. The background
    * of each child is placed in the Content() list (suitable for inline
    * children and other elements that behave like inlines,

@@ -1141,8 +1141,23 @@ void nsContainerFrame::ReflowOverflowContainerChildren(
 
 void nsContainerFrame::DisplayOverflowContainers(
     nsDisplayListBuilder* aBuilder, const nsDisplayListSet& aLists) {
+  MOZ_ASSERT(GetPrevInFlow(),
+             "This method is to build display list for child frames that has "
+             "no placeholders in current container's principal child list.");
   if (nsFrameList* overflowconts = GetOverflowContainers()) {
     for (nsIFrame* frame : *overflowconts) {
+      BuildDisplayListForChild(aBuilder, frame, aLists);
+    }
+  }
+}
+
+void nsContainerFrame::DisplayAbsoluteFrames(nsDisplayListBuilder* aBuilder,
+                                             const nsDisplayListSet& aLists) {
+  MOZ_ASSERT(GetPrevInFlow(),
+             "This method is to build display list for child frames that has "
+             "no placeholders in current container's principal child list.");
+  if (IsAbsoluteContainer()) {
+    for (nsIFrame* frame : GetAbsoluteContainingBlock()->GetChildList()) {
       BuildDisplayListForChild(aBuilder, frame, aLists);
     }
   }

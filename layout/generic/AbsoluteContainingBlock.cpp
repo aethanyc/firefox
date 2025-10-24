@@ -12,6 +12,7 @@
 #include "mozilla/AbsoluteContainingBlock.h"
 
 #include "AnchorPositioningUtils.h"
+#include "mozilla/Assertions.h"
 #include "mozilla/CSSAlignUtils.h"
 #include "mozilla/PresShell.h"
 #include "mozilla/ReflowInput.h"
@@ -257,12 +258,19 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
           nextFrame = aPresContext->PresShell()
                           ->FrameConstructor()
                           ->CreateContinuingFrame(kidFrame, aDelegatingFrame);
+          mPushedAbsoluteFrames.AppendFrame(nullptr, nextFrame);
+        } else {
+          // XXX: Do we need to steal nextFrame and add it to
+          // mPushedAbsoluteFrames?
         }
-        mPushedAbsoluteFrames.AppendFrame(nullptr, nextFrame);
         reflowStatus.MergeCompletionStatusFrom(kidStatus);
       } else if (nextFrame) {
         // Delete any continuations in nextFrame's absolute list.
-        // TODO:
+
+        // XXX: Need to teach DeleteNextInFlowChild() find next-in-flow in
+        // AbsoluteContainingBlock's child list.
+        FrameDestroyContext context(aPresContext->PresShell());
+        nextFrame->GetParent()->DeleteNextInFlowChild(context, nextFrame, true);
       }
     } else {
       if (aOverflowAreas) {

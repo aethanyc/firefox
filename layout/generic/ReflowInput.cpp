@@ -14,6 +14,7 @@
 #include "LayoutLogging.h"
 #include "PresShell.h"
 #include "StickyScrollContainer.h"
+#include "mozilla/Logging.h"
 #include "mozilla/ScrollContainerFrame.h"
 #include "mozilla/WritingModes.h"
 #include "mozilla/dom/HTMLInputElement.h"
@@ -1706,7 +1707,8 @@ void ReflowInput::InitAbsoluteConstraints(const ReflowInput* aCBReflowInput,
   // and 'block-end' are 'auto', then compute the hypothetical box position
   // where the element would have if it were in the flow.
   nsHypotheticalPosition hypotheticalPos;
-  if ((iStartIsAuto && iEndIsAuto) || (bStartIsAuto && bEndIsAuto)) {
+  if (!mFrame->GetPrevInFlow() &&
+      ((iStartIsAuto && iEndIsAuto) || (bStartIsAuto && bEndIsAuto))) {
     nsPlaceholderFrame* placeholderFrame = mFrame->GetPlaceholderFrame();
     MOZ_ASSERT(placeholderFrame, "no placeholder frame");
     nsIFrame* placeholderParent = placeholderFrame->GetParent();
@@ -2125,12 +2127,7 @@ static nscoord CalcQuirkContainingBlockHeight(
 
 LogicalSize ReflowInput::ComputeContainingBlockRectangle(
     nsPresContext* aPresContext, const ReflowInput* aContainingBlockRI) const {
-  MOZ_ASSERT(!mFrame->IsAbsolutelyPositioned(mStyleDisplay) ||
-                 // XXX: We have a hack putting abspos continuations in overflow
-                 // container lists (bug 154892), so they are not reflowed by
-                 // AbsoluteContainingBlock until we revisit the abspos
-                 // continuations handling.
-                 mFrame->GetPrevInFlow(),
+  MOZ_ASSERT(!mFrame->IsAbsolutelyPositioned(mStyleDisplay),
              "AbsoluteContainingBlock always provides a containing-block size "
              "when creating ReflowInput for its children!");
 
@@ -2210,6 +2207,8 @@ void ReflowInput::InitConstraints(
     const ReflowInput* cbri = mCBReflowInput;
     MOZ_ASSERT(cbri, "no containing block");
     MOZ_ASSERT(mFrame->GetParent());
+
+    printf("aContainingBlockSize %s\n", ToString(aContainingBlockSize).c_str());
 
     // If we weren't given a containing block size, then compute one.
     if (aContainingBlockSize.isNothing()) {
@@ -2305,6 +2304,13 @@ void ReflowInput::InitConstraints(
     // Calculate the computed inlineSize and blockSize.
     // This varies by frame type.
 
+    if (mFrame->IsAbsolutelyPositioned(mStyleDisplay)) {
+      printf("InitConstraints for %s, is abs-style %s, has prev-in-flow %s, \n",
+             mFrame->ListTag().get(),
+             YesOrNo(mFrame->IsAbsolutelyPositioned(mStyleDisplay)),
+             YesOrNo(mFrame->GetPrevInFlow()));
+    }
+
     if (IsInternalTableFrame()) {
       // Internal table elements. The rules vary depending on the type.
       // Calculate the computed isize
@@ -2361,13 +2367,13 @@ void ReflowInput::InitConstraints(
       mComputedMinSize.SizeTo(mWritingMode, 0, 0);
       mComputedMaxSize.SizeTo(mWritingMode, NS_UNCONSTRAINEDSIZE,
                               NS_UNCONSTRAINEDSIZE);
-    } else if (mFrame->IsAbsolutelyPositioned(mStyleDisplay) &&
-               // XXXfr hack for making frames behave properly when in overflow
-               // container lists, see bug 154892; need to revisit later
-               !mFrame->GetPrevInFlow()) {
+    } else if (mFrame->IsAbsolutelyPositioned(mStyleDisplay)) {
+      printf("Calling InitAbsoluteConstraints for %s\n",
+             mFrame->ListTag().get());
       InitAbsoluteConstraints(cbri,
                               cbSize.ConvertTo(cbri->GetWritingMode(), wm));
     } else {
+      printf("Using normal init constraints path!\n");
       AutoMaybeDisableFontInflation an(mFrame);
 
       nsIFrame* const alignCB = [&] {
