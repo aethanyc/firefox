@@ -2246,47 +2246,6 @@ void ReflowInput::InitConstraints(
         mStylePosition->BSize(wm, AnchorPosResolutionParams::From(this));
     bool isAutoBSize = blockSize->BehavesLikeInitialValueOnBlockAxis();
 
-    // Check for a percentage based block size and a containing block
-    // block size that depends on the content block size
-    if (blockSize->HasPercent()) {
-      if (NS_UNCONSTRAINEDSIZE == cbSize.BSize(wm)) {
-        // this if clause enables %-blockSize on replaced inline frames,
-        // such as images.  See bug 54119.  The else clause "blockSizeUnit =
-        // eStyleUnit_Auto;" used to be called exclusively.
-        if (mFlags.mIsReplaced && mStyleDisplay->IsInlineOutsideStyle()) {
-          // Get the containing block's reflow input
-          NS_ASSERTION(cbri, "no containing block");
-          // in quirks mode, get the cb height using the special quirk method
-          if (!wm.IsVertical() &&
-              eCompatibility_NavQuirks == aPresContext->CompatibilityMode()) {
-            if (!cbri->mFrame->IsTableCellFrame() &&
-                !cbri->mFrame->IsFlexOrGridItem()) {
-              cbSize.BSize(wm) = CalcQuirkContainingBlockHeight(cbri);
-              if (cbSize.BSize(wm) == NS_UNCONSTRAINEDSIZE) {
-                isAutoBSize = true;
-              }
-            } else {
-              isAutoBSize = true;
-            }
-          }
-          // in standard mode, use the cb block size.  if it's "auto",
-          // as will be the case by default in BODY, use auto block size
-          // as per CSS2 spec.
-          else {
-            nscoord computedBSize = cbri->ComputedSize(wm).BSize(wm);
-            if (NS_UNCONSTRAINEDSIZE != computedBSize) {
-              cbSize.BSize(wm) = computedBSize;
-            } else {
-              isAutoBSize = true;
-            }
-          }
-        } else {
-          // default to interpreting the blockSize like 'auto'
-          isAutoBSize = true;
-        }
-      }
-    }
-
     // Compute our offsets if the element is relatively positioned.  We
     // need the correct containing block inline-size and block-size
     // here, which is why we need to do it after all the quirks-n-such
