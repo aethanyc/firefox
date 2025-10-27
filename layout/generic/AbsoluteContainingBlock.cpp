@@ -1129,7 +1129,6 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
               ->GetAnchorResolvedInset(LogicalSide::BEnd, outerWM,
                                        anchorResolutionParams)
               ->IsAuto();
-      const LogicalSize logicalCBSizeOuterWM(outerWM, usedCb.Size());
       const LogicalSize kidMarginBox{
           outerWM, margin.IStartEnd(outerWM) + kidSize.ISize(outerWM),
           margin.BStartEnd(outerWM) + kidSize.BSize(outerWM)};
@@ -1142,8 +1141,8 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
             "Non-auto inline inset but requires CSS alignment for static "
             "position?");
         auto alignOffset = OffsetToAlignedStaticPos(
-            kidReflowInput, kidMarginBox, logicalCBSizeOuterWM,
-            placeholderContainer, outerWM, LogicalAxis::Inline,
+            kidReflowInput, kidMarginBox, cbSize, placeholderContainer, outerWM,
+            LogicalAxis::Inline,
             Some(NonAutoAlignParams{
                 offsets.IStart(outerWM),
                 offsets.IEnd(outerWM),
@@ -1151,7 +1150,7 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
 
         offsets.IStart(outerWM) += alignOffset;
         offsets.IEnd(outerWM) =
-            logicalCBSizeOuterWM.ISize(outerWM) -
+            cbSize.ISize(outerWM) -
             (offsets.IStart(outerWM) + kidMarginBox.ISize(outerWM));
       }
       if (!bInsetAuto) {
@@ -1159,15 +1158,15 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
                    "Non-auto block inset but requires CSS alignment for static "
                    "position?");
         auto alignOffset = OffsetToAlignedStaticPos(
-            kidReflowInput, kidMarginBox, logicalCBSizeOuterWM,
-            placeholderContainer, outerWM, LogicalAxis::Block,
+            kidReflowInput, kidMarginBox, cbSize, placeholderContainer, outerWM,
+            LogicalAxis::Block,
             Some(NonAutoAlignParams{
                 offsets.BStart(outerWM),
                 offsets.BEnd(outerWM),
             }));
         offsets.BStart(outerWM) += alignOffset;
         offsets.BEnd(outerWM) =
-            logicalCBSizeOuterWM.BSize(outerWM) -
+            cbSize.BSize(outerWM) -
             (offsets.BStart(outerWM) + kidMarginBox.BSize(outerWM));
       }
 
