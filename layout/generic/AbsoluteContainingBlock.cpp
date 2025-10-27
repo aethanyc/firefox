@@ -1058,23 +1058,28 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
         (aKidFrame->GetLogicalRect(usedCb.Size()).BStart(wm) <=
          aReflowInput.AvailableBSize());
 
-    // Get the border values
-    const LogicalMargin border =
-        aDelegatingFrame->GetLogicalUsedBorder(outerWM);
-    const nsIFrame* prevInFlow = aDelegatingFrame->GetPrevInFlow();
+    LogicalMargin border = aDelegatingFrame->GetLogicalUsedBorder(outerWM);
+    if (aDelegatingFrame->GetPrevInFlow()) {
+      LogicalSides skip(outerWM, LogicalSide::BStart);
+      if (aDelegatingFrame->HasAnyStateBits(NS_FRAME_IS_OVERFLOW_CONTAINER)) {
+        skip += LogicalSide::BEnd;
+      }
+      border.ApplySkipSides(skip);
+    }
     const LogicalSize availSize(
         outerWM, cbSize.ISize(outerWM),
-        kidFrameMaySplit ? aReflowInput.AvailableBSize() -
-                               (prevInFlow ? 0 : border.BStart(outerWM))
-                         : NS_UNCONSTRAINEDSIZE);
+        kidFrameMaySplit
+            ? aReflowInput.AvailableBSize() - border.BStart(outerWM)
+            : NS_UNCONSTRAINEDSIZE);
 
     ReflowInput kidReflowInput(aPresContext, aReflowInput, aKidFrame,
                                availSize.ConvertTo(wm, outerWM),
                                Some(cbSize.ConvertTo(wm, outerWM)), initFlags,
                                {}, {}, aAnchorPosReferenceData);
 
+    const nsIFrame* kidPrevInFlow = aKidFrame->GetPrevInFlow();
     if (nscoord kidAvailBSize = kidReflowInput.AvailableBSize();
-        kidAvailBSize != NS_UNCONSTRAINEDSIZE && !prevInFlow) {
+        kidAvailBSize != NS_UNCONSTRAINEDSIZE && !kidPrevInFlow) {
       // Shrink available block-size if it's constrained.
       kidAvailBSize -= kidReflowInput.ComputedLogicalMargin(wm).BStart(wm);
       const nscoord kidOffsetBStart =
@@ -1093,6 +1098,9 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
     // popups, which handle their own positioning.
     if (!aKidFrame->IsMenuPopupFrame()) {
       const LogicalSize kidSize = kidDesiredSize.Size(outerWM);
+
+      // XXX: it seems OK to skip computing offsets and margin for
+      // continuations.
 
       LogicalMargin offsets = kidReflowInput.ComputedLogicalOffsets(outerWM);
       LogicalMargin margin = kidReflowInput.ComputedLogicalMargin(outerWM);
@@ -1117,6 +1125,10 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
         ResolveAutoMarginsAfterLayout(kidReflowInput, cbSize, kidSize, margin,
                                       offsets);
       }
+
+      printf("offset after reflow %s\n", ToString(offsets).c_str());
+      printf("margin after reflow %s\n", ToString(margin).c_str());
+      printf("border after reflow %s\n", ToString(border).c_str());
 
       // If the inset is constrained as non-auto, we may have a child that does
       // not fill out the inset-reduced containing block. In this case, we need
@@ -1186,17 +1198,27 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
             (offsets.BStart(outerWM) + kidMarginBox.BSize(outerWM));
       }
 
-      LogicalRect rect(outerWM,
-                       border.StartOffset(outerWM) +
-                           offsets.StartOffset(outerWM) +
-                           margin.StartOffset(outerWM),
-                       kidSize);
+      LogicalPoint kidPos(outerWM);
+      if (!kidPrevInFlow) {
+        kidPos = border.StartOffset(outerWM) + offsets.StartOffset(outerWM) +
+                 margin.StartOffset(outerWM);
+      } else {
+        kidPos.I(outerWM) = kidPrevInFlow->IStart(
+            outerWM, cbSize.GetPhysicalSize(outerWM) +
+                         border.Size(outerWM).GetPhysicalSize(outerWM));
+        kidPos.B(outerWM) = 0;
+      }
+
+      LogicalRect rect(outerWM, kidPos, kidSize);
       nsRect r = rect.GetPhysicalRect(
           outerWM, cbSize.GetPhysicalSize(outerWM) +
                        border.Size(outerWM).GetPhysicalSize(outerWM));
 
       // Offset the frame rect by the given origin of the absolute CB.
       r += usedCb.TopLeft();
+
+      printf("kid rect %s, used cb point %s\n", ToString(r).c_str(),
+             ToString(usedCb).c_str());
 
       aKidFrame->SetRect(r);
 
