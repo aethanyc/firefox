@@ -173,6 +173,11 @@ class AbsoluteContainingBlock {
    */
   void DoMarkFramesDirty(bool aMarkAllDirty);
 
+  /**
+   * Remove aOldFrame from one of our frame lists, and destroy it.
+   */
+  void DoRemoveFrame(FrameDestroyContext& aContext, nsIFrame* aOldFrame);
+
  protected:
   nsFrameList mAbsoluteFrames;
   nsFrameList mPushedAbsoluteFrames;

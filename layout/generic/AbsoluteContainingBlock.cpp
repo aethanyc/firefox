@@ -99,10 +99,24 @@ void AbsoluteContainingBlock::RemoveFrame(FrameDestroyContext& aContext,
                                           FrameChildListID aListID,
                                           nsIFrame* aOldFrame) {
   NS_ASSERTION(mChildListID == aListID, "unexpected child list");
-  if (nsIFrame* nif = aOldFrame->GetNextInFlow()) {
-    nif->GetParent()->DeleteNextInFlowChild(aContext, nif, false);
+
+  AutoTArray<nsIFrame*, 8> delFrames;
+  for (nsIFrame* f = aOldFrame; f; f = f->GetNextInFlow()) {
+    delFrames.AppendElement(f);
   }
-  mAbsoluteFrames.DestroyFrame(aContext, aOldFrame);
+  for (nsIFrame* delFrame : Reversed(delFrames)) {
+    delFrame->GetParent()->GetAbsoluteContainingBlock()->DoRemoveFrame(
+        aContext, delFrame);
+  }
+}
+
+void AbsoluteContainingBlock::DoRemoveFrame(FrameDestroyContext& aContext,
+                                            nsIFrame* aOldFrame) {
+  const bool oldFrameRemoved =
+      mAbsoluteFrames.StartRemoveFrame(aOldFrame) ||
+      mPushedAbsoluteFrames.ContinueRemoveFrame(aOldFrame);
+  MOZ_ASSERT(oldFrameRemoved, "Failed to remove aOldFrame!");
+  aOldFrame->Destroy(aContext);
 }
 
 nsFrameList AbsoluteContainingBlock::StealPushedChildList() {
