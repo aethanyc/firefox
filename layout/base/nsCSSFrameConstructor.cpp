@@ -2981,11 +2981,16 @@ nsContainerFrame* nsCSSFrameConstructor::ConstructPageFrame(
   if (!prevPageContentFrame) {
     // The canvas is an inheriting anon box, so needs to be "owned" by the page
     // content.
-    pageContentFrame->AddStateBits(NS_FRAME_OWNS_ANON_BOXES);
+    pageContentFrame->AddStateBits(NS_FRAME_OWNS_ANON_BOXES |
+                                   NS_FRAME_CAN_HAVE_ABSPOS_CHILDREN);
+  } else {
+    MOZ_ASSERT(
+        pageContentFrame->HasAllStateBits(NS_FRAME_CAN_HAVE_ABSPOS_CHILDREN),
+        "This bit should've been carried over from the previous continuation "
+        "in nsIFrame::Init().");
   }
   SetInitialSingleChild(pageFrame, pageContentFrame);
   // Make it an absolute container for fixed-pos elements
-  pageContentFrame->AddStateBits(NS_FRAME_CAN_HAVE_ABSPOS_CHILDREN);
   pageContentFrame->MarkAsAbsoluteContainingBlock();
 
   RefPtr<ComputedStyle> canvasPseudoStyle =
@@ -10818,10 +10823,14 @@ nsFrameList nsCSSFrameConstructor::CreateColumnSpanSiblings(
     // continuation of the last non-column-span wrapper frame.
     auto* nonColumnSpanWrapper = static_cast<nsContainerFrame*>(
         CreateContinuingFrame(lastNonColumnSpanWrapper, parentFrame, false));
-    nonColumnSpanWrapper->AddStateBits(NS_FRAME_HAS_MULTI_COLUMN_ANCESTOR |
-                                       NS_FRAME_CAN_HAVE_ABSPOS_CHILDREN);
+    MOZ_ASSERT(nonColumnSpanWrapper->HasAllStateBits(
+                   NS_FRAME_HAS_MULTI_COLUMN_ANCESTOR |
+                   NS_FRAME_CAN_HAVE_ABSPOS_CHILDREN),
+               "These bits should've been carried over from the previous "
+               "continuation in nsIFrame::Init()!");
     MOZ_ASSERT(nonColumnSpanWrapper->HasColumnSpanSiblings(),
-               "The bit should propagate to the next continuation!");
+               "This bit should've been carried over from the previous "
+               "continuation in nsIFrame::Init()!");
 
     if (aChildList.NotEmpty()) {
       nsFrameList nonColumnSpanKids =
