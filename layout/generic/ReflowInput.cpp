@@ -2125,14 +2125,10 @@ static nscoord CalcQuirkContainingBlockHeight(
 
 LogicalSize ReflowInput::ComputeContainingBlockRectangle(
     nsPresContext* aPresContext, const ReflowInput* aContainingBlockRI) const {
-  MOZ_ASSERT(!mFrame->IsAbsolutelyPositioned(mStyleDisplay) ||
-                 // XXX: We have a hack putting abspos continuations in overflow
-                 // container lists (bug 154892), so they are not reflowed by
-                 // AbsoluteContainingBlock until we revisit the abspos
-                 // continuations handling.
-                 mFrame->GetPrevInFlow(),
-             "AbsoluteContainingBlock always provides a containing-block size "
-             "when creating ReflowInput for its children!");
+  MOZ_ASSERT(
+      !mFrame->IsAbsolutelyPositioned(mStyleDisplay) || mFrame->GetPrevInFlow(),
+      "AbsoluteContainingBlock always provides a containing-block size "
+      "when creating ReflowInput for its children!");
 
   LogicalSize cbSize = aContainingBlockRI->ComputedSize();
   WritingMode wm = aContainingBlockRI->GetWritingMode();
@@ -2213,6 +2209,13 @@ void ReflowInput::InitConstraints(
 
     // If we weren't given a containing block size, then compute one.
     if (aContainingBlockSize.isNothing()) {
+      cbSize = ComputeContainingBlockRectangle(aPresContext, cbri);
+    } else if (mFrame->IsAbsolutelyPositioned(mStyleDisplay) &&
+               mFrame->GetPrevInFlow()) {
+      // AbsoluteContainingBlock provides a containing-block size. However, if
+      // the delegating frame is a overflow container, i.e. it has zero
+      // block-size, we'll need to compute a containing-block size suitable for
+      // resolving mFrame's percentage block-size.
       cbSize = ComputeContainingBlockRectangle(aPresContext, cbri);
     }
 
@@ -2362,8 +2365,8 @@ void ReflowInput::InitConstraints(
       mComputedMaxSize.SizeTo(mWritingMode, NS_UNCONSTRAINEDSIZE,
                               NS_UNCONSTRAINEDSIZE);
     } else if (mFrame->IsAbsolutelyPositioned(mStyleDisplay) &&
-               // XXXfr hack for making frames behave properly when in overflow
-               // container lists, see bug 154892; need to revisit later
+               // We need to compute the absolute constraints only for abspos
+               // first-in-flow.
                !mFrame->GetPrevInFlow()) {
       InitAbsoluteConstraints(cbri,
                               cbSize.ConvertTo(cbri->GetWritingMode(), wm));
