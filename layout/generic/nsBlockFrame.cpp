@@ -1672,7 +1672,8 @@ void nsBlockFrame::Reflow(nsPresContext* aPresContext, ReflowOutput& aMetrics,
   // children in that situation --- what we think is our "new size" will not be
   // our real new size. This also happens to be more efficient.
   WritingMode parentWM = aMetrics.GetWritingMode();
-  if (HasAbsolutelyPositionedChildren()) {
+  if (HasAbsolutelyPositionedChildren() ||
+      (GetPrevInFlow() && GetPrevInFlow()->HasAbsolutelyPositionedChildren())) {
     AbsoluteContainingBlock* absoluteContainer = GetAbsoluteContainingBlock();
     bool haveInterrupt = aPresContext->HasPendingInterrupt();
     if (aReflowInput.WillReflowAgainForClearance() || haveInterrupt) {
