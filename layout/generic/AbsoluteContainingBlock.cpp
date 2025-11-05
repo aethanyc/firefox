@@ -1298,7 +1298,15 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
 
     // Position the child relative to our padding edge. Don't do this for
     // popups, which handle their own positioning.
-    if (!aKidFrame->IsMenuPopupFrame()) {
+    if (kidPrevInFlow) {
+      const nsSize cbBorderBoxSize =
+          (cbSize + border.Size(outerWM)).GetPhysicalSize(outerWM);
+      const LogicalPoint kidPos(
+          outerWM, kidPrevInFlow->IStart(outerWM, cbBorderBoxSize), 0);
+      const LogicalSize kidSize = kidDesiredSize.Size(outerWM);
+      const LogicalRect kidRect(outerWM, kidPos, kidSize);
+      aKidFrame->SetRect(outerWM, kidRect, cbBorderBoxSize);
+    } else if (!aKidFrame->IsMenuPopupFrame()) {
       const LogicalSize kidSize = kidDesiredSize.Size(outerWM);
 
       // Bug 1998025: Investigate if we can skip computing offsets, margins,
@@ -1399,18 +1407,11 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
             (offsets.BStart(outerWM) + kidMarginBox.BSize(outerWM));
       }
 
-      LogicalPoint kidPos(outerWM);
-      if (!kidPrevInFlow) {
-        kidPos = border.StartOffset(outerWM) + offsets.StartOffset(outerWM) +
-                 margin.StartOffset(outerWM);
-      } else {
-        kidPos.I(outerWM) = kidPrevInFlow->IStart(
-            outerWM, cbSize.GetPhysicalSize(outerWM) +
-                         border.Size(outerWM).GetPhysicalSize(outerWM));
-        kidPos.B(outerWM) = 0;
-      }
-
-      LogicalRect rect(outerWM, kidPos, kidSize);
+      LogicalRect rect(outerWM,
+                       border.StartOffset(outerWM) +
+                           offsets.StartOffset(outerWM) +
+                           margin.StartOffset(outerWM),
+                       kidSize);
       nsRect r = rect.GetPhysicalRect(
           outerWM, cbSize.GetPhysicalSize(outerWM) +
                        border.Size(outerWM).GetPhysicalSize(outerWM));
