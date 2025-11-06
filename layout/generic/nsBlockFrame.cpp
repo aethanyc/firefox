@@ -1722,12 +1722,12 @@ void nsBlockFrame::Reflow(nsPresContext* aPresContext, ReflowOutput& aMetrics,
           aMetrics.Height() != oldSize.height;
 
       const LogicalSize containingBlockSize =
-          aMetrics.Size(parentWM) -
-          aReflowInput.ComputedLogicalBorder(parentWM)
+          aMetrics.Size(wm) -
+          aReflowInput.ComputedLogicalBorder(wm)
               .ApplySkipSides(PreReflowBlockLevelLogicalSkipSides())
-              .Size(parentWM);
+              .Size(wm);
       nsRect containingBlock(nsPoint(0, 0),
-                             containingBlockSize.GetPhysicalSize(parentWM));
+                             containingBlockSize.GetPhysicalSize(wm));
       AbsPosReflowFlags flags{AbsPosReflowFlag::AllowFragmentation};
       if (cbWidthChanged) {
         flags += AbsPosReflowFlag::CBWidthChanged;

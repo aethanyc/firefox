@@ -2212,11 +2212,16 @@ void ReflowInput::InitConstraints(
       cbSize = ComputeContainingBlockRectangle(aPresContext, cbri);
     } else if (mFrame->IsAbsolutelyPositioned(mStyleDisplay) &&
                mFrame->GetPrevInFlow()) {
-      // AbsoluteContainingBlock provides a containing-block size. However, if
-      // the delegating frame is a overflow container, i.e. it has zero
-      // block-size, we'll need to compute a containing-block size suitable for
-      // resolving mFrame's percentage block-size.
-      cbSize = ComputeContainingBlockRectangle(aPresContext, cbri);
+      // AbsoluteContainingBlock always provides a containing-block size to
+      // ReflowInput. However, if the delegating frame is a continuation or an
+      // overflow container (i.e. it has zero block-size), we'll need a
+      // containing-block size (padding-box size) suitable for resolving abspos
+      // continuation's percentage block-size.
+      //
+      // Bug 1998818 is to fix the containing-block size for resolving
+      // percentage block-size for abspos's first-in-flow.
+      cbSize = ComputeContainingBlockRectangle(aPresContext, cbri) +
+               cbri->ComputedLogicalPadding(wm).Size(wm);
     }
 
     // See if the containing block height is based on the size of its

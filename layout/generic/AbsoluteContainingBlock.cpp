@@ -299,7 +299,6 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
                  "ShouldAvoidBreakInside should prevent this from happening");
       nsIFrame* nextFrame = kidFrame->GetNextInFlow();
       if (!kidStatus.IsFullyComplete()) {
-        // Need a continuation
         if (!nextFrame) {
           nextFrame = aPresContext->PresShell()
                           ->FrameConstructor()
@@ -313,7 +312,7 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
         }
         reflowStatus.MergeCompletionStatusFrom(kidStatus);
       } else if (nextFrame) {
-        // Delete any continuations in nextFrame's absolute list.
+        // kidFrame is fully-complete. Delete all its next-in-flows.
         FrameDestroyContext context(aPresContext->PresShell());
         nextFrame->GetParent()->GetAbsoluteContainingBlock()->RemoveFrame(
             context, FrameChildListID::Absolute, nextFrame);
