@@ -976,10 +976,9 @@ void nsContainerFrame::ReflowAbsoluteFrames(nsPresContext* aPresContext,
                                             ReflowOutput& aDesiredSize,
                                             const ReflowInput& aReflowInput,
                                             nsReflowStatus& aStatus) {
-  if (HasAbsolutelyPositionedChildren() ||
-      (GetPrevInFlow() && GetPrevInFlow()->HasAbsolutelyPositionedChildren())) {
-    AbsoluteContainingBlock* absoluteContainer = GetAbsoluteContainingBlock();
-
+  AbsoluteContainingBlock* absoluteContainer =
+      IsAbsoluteContainer() ? GetAbsoluteContainingBlock() : nullptr;
+  if (absoluteContainer->PrepareAbsoluteFrames(this)) {
     // The containing block for the abs pos kids is formed by our padding edge.
     nsMargin usedBorder = GetUsedBorder();
     nscoord containingBlockWidth =

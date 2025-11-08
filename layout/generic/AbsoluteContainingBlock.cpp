@@ -110,15 +110,53 @@ void AbsoluteContainingBlock::RemoveFrame(FrameDestroyContext& aContext,
   }
 }
 
+nsFrameList AbsoluteContainingBlock::StealPushedChildList() {
+  return std::move(mPushedAbsoluteFrames);
+}
+
+bool AbsoluteContainingBlock::PrepareAbsoluteFrames(
+    nsContainerFrame* aDelegatingFrame) {
+  if (const nsIFrame* prevInFlow = aDelegatingFrame->GetPrevInFlow()) {
+    AbsoluteContainingBlock* prevAbsCB =
+        prevInFlow->GetAbsoluteContainingBlock();
+    MOZ_ASSERT(prevAbsCB,
+               "If this delegating frame has an absCB, its prev-in-flow must "
+               "have one, too!");
+
+    // Prepend the pushed absolute frames from the previous absCB to our
+    // absolute child list.
+    nsFrameList pushedFrames = prevAbsCB->StealPushedChildList();
+    if (pushedFrames.NotEmpty()) {
+      mAbsoluteFrames.InsertFrames(aDelegatingFrame, nullptr,
+                                   std::move(pushedFrames));
+    }
+  }
+
+  // Our pushed absolute child list might be non-empty if our next-in-flow
+  // hasn't reflowed yet. Move any child in that list that is a first-in-flow,
+  // or whose prev-in-flow is not in our absolute child list, into our absolute
+  // child list.
+  if (mPushedAbsoluteFrames.NotEmpty()) {
+    nsIFrame* child = mPushedAbsoluteFrames.FirstChild();
+    while (child) {
+      nsIFrame* next = child->GetNextInFlow();
+      if (!child->GetPrevInFlow() ||
+          child->GetPrevInFlow()->GetParent() != aDelegatingFrame) {
+        mPushedAbsoluteFrames.RemoveFrame(child);
+        mAbsoluteFrames.AppendFrame(nullptr, child);
+      }
+      child = next;
+    }
+  }
+
+  return mAbsoluteFrames.NotEmpty();
+}
+
 void AbsoluteContainingBlock::StealFrame(nsIFrame* aFrame) {
   const DebugOnly<bool> frameRemoved =
       mAbsoluteFrames.StartRemoveFrame(aFrame) ||
       mPushedAbsoluteFrames.ContinueRemoveFrame(aFrame);
   MOZ_ASSERT(frameRemoved, "Failed to find aFrame from our child lists!");
-}
-
-nsFrameList AbsoluteContainingBlock::StealPushedChildList() {
-  return std::move(mPushedAbsoluteFrames);
 }
 
 static void MaybeMarkAncestorsAsHavingDescendantDependentOnItsStaticPos(

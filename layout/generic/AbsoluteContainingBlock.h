@@ -76,6 +76,15 @@ class AbsoluteContainingBlock {
   [[nodiscard]] nsFrameList StealPushedChildList();
 
   /**
+   * Prepare our absolute child list so that it is ready to reflow by moving all
+   * the push absolute frames in aDelegatingFrame prev-in-flow's absCB, and some
+   * in our own push absolute child list, to our absolute child list.
+   *
+   * @return true if we have absolute frames.
+   */
+  bool PrepareAbsoluteFrames(nsContainerFrame* aDelegatingFrame);
+
+  /**
    * Called by the delegating frame after it has done its reflow first. This
    * function will reflow any absolutely positioned child frames that need to
    * be reflowed, e.g., because the absolutely positioned child frame has
@@ -177,7 +186,6 @@ class AbsoluteContainingBlock {
    */
   void StealFrame(nsIFrame* aFrame);
 
- protected:
   nsFrameList mAbsoluteFrames;
   nsFrameList mPushedAbsoluteFrames;
 
