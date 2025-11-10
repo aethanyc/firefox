@@ -9331,7 +9331,9 @@ nscoord nsGridContainerFrame::ReflowChildren(GridReflowInput& aGridRI,
   aDesiredSize.mOverflowAreas.UnionWith(ocBounds);
   aStatus.MergeCompletionStatusFrom(ocStatus);
 
-  if (IsAbsoluteContainer()) {
+  AbsoluteContainingBlock* absoluteContainer =
+      IsAbsoluteContainer() ? GetAbsoluteContainingBlock() : nullptr;
+  if (absoluteContainer && absoluteContainer->PrepareAbsoluteFrames(this)) {
     const nsFrameList& children = GetChildList(GetAbsoluteListID());
     if (!children.IsEmpty()) {
       // 'gridOrigin' is the origin of the grid (the start of the first track),
@@ -9368,9 +9370,9 @@ nscoord nsGridContainerFrame::ReflowChildren(GridReflowInput& aGridRI,
                               AbsPosReflowFlag::CBWidthChanged,
                               AbsPosReflowFlag::CBHeightChanged,
                               AbsPosReflowFlag::IsGridContainerCB};
-      GetAbsoluteContainingBlock()->Reflow(
-          this, PresContext(), *aGridRI.mReflowInput, aStatus, dummyRect, flags,
-          &aDesiredSize.mOverflowAreas);
+      absoluteContainer->Reflow(this, PresContext(), *aGridRI.mReflowInput,
+                                aStatus, dummyRect, flags,
+                                &aDesiredSize.mOverflowAreas);
     }
   }
   return bSize;

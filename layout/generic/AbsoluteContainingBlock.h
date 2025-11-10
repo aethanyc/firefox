@@ -57,6 +57,9 @@ class AbsoluteContainingBlock {
   }
 
   const nsFrameList& GetChildList() const { return mAbsoluteFrames; }
+  const nsFrameList& GetPushedChildList() const {
+    return mPushedAbsoluteFrames;
+  }
 
   void SetInitialChildList(nsIFrame* aDelegatingFrame, FrameChildListID aListID,
                            nsFrameList&& aChildList);
@@ -65,6 +68,21 @@ class AbsoluteContainingBlock {
   void InsertFrames(nsIFrame* aDelegatingFrame, FrameChildListID aListID,
                     nsIFrame* aPrevFrame, nsFrameList&& aFrameList);
   void RemoveFrame(FrameDestroyContext&, FrameChildListID, nsIFrame*);
+
+  /**
+   * Return the pushed absolute frames. The caller is responsible for passing
+   * the ownership of the frames to someone else, or destroying them.
+   */
+  [[nodiscard]] nsFrameList StealPushedChildList();
+
+  /**
+   * Prepare our absolute child list so that it is ready to reflow by moving all
+   * the push absolute frames in aDelegatingFrame prev-in-flow's absCB, and some
+   * in our own push absolute child list, to our absolute child list.
+   *
+   * @return true if we have absolute frames.
+   */
+  bool PrepareAbsoluteFrames(nsContainerFrame* aDelegatingFrame);
 
   /**
    * Called by the delegating frame after it has done its reflow first. This
@@ -91,7 +109,9 @@ class AbsoluteContainingBlock {
   using DestroyContext = nsIFrame::DestroyContext;
   void DestroyFrames(DestroyContext&);
 
-  bool HasAbsoluteFrames() const { return mAbsoluteFrames.NotEmpty(); }
+  bool HasAbsoluteFrames() const {
+    return mAbsoluteFrames.NotEmpty() || mPushedAbsoluteFrames.NotEmpty();
+  }
 
   /**
    * Mark our size-dependent absolute frames with NS_FRAME_HAS_DIRTY_CHILDREN
@@ -163,8 +183,13 @@ class AbsoluteContainingBlock {
    */
   void DoMarkFramesDirty(bool aMarkAllDirty);
 
- protected:
-  nsFrameList mAbsoluteFrames;  // additional named child list
+  /**
+   * Remove aFrame from one of our frame lists without destroy it.
+   */
+  void StealFrame(nsIFrame* aFrame);
+
+  nsFrameList mAbsoluteFrames;
+  nsFrameList mPushedAbsoluteFrames;
 
 #ifdef DEBUG
   // FrameChildListID::Fixed or FrameChildListID::Absolute
