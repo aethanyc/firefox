@@ -9333,7 +9333,7 @@ nscoord nsGridContainerFrame::ReflowChildren(GridReflowInput& aGridRI,
 
   AbsoluteContainingBlock* absoluteContainer =
       IsAbsoluteContainer() ? GetAbsoluteContainingBlock() : nullptr;
-  if (absoluteContainer && absoluteContainer->HasAbsoluteFrames()) {
+  if (absoluteContainer && absoluteContainer->PrepareAbsoluteFrames(this)) {
     // 'gridOrigin' is the origin of the grid (the start of the first track),
     // with respect to the grid container's padding-box (CB).
     LogicalMargin pad(aGridRI.mReflowInput->ComputedLogicalPadding(wm));
