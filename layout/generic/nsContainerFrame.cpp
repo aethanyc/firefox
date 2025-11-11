@@ -980,17 +980,20 @@ void nsContainerFrame::ReflowAbsoluteFrames(nsPresContext* aPresContext,
       IsAbsoluteContainer() ? GetAbsoluteContainingBlock() : nullptr;
   if (absoluteContainer && absoluteContainer->PrepareAbsoluteFrames(this)) {
     // The containing block for the abs pos kids is formed by our padding edge.
-    nsMargin usedBorder = GetUsedBorder();
-    nsRect containingBlock(nsPoint{}, aDesiredSize.PhysicalSize());
-    containingBlock.Deflate(usedBorder);
+    const auto wm = GetWritingMode();
+    LogicalRect containingBlock(wm, LogicalPoint(wm), aDesiredSize.Size(wm));
+    containingBlock.Deflate(
+        wm, aReflowInput.ComputedLogicalBorder(wm).ApplySkipSides(
+                PreReflowBlockLevelLogicalSkipSides()));
     // XXX: To optimize the performance, set the flags only when the CB width or
     // height actually changes.
     AbsPosReflowFlags flags{AbsPosReflowFlag::AllowFragmentation,
                             AbsPosReflowFlag::CBWidthChanged,
                             AbsPosReflowFlag::CBHeightChanged};
-    absoluteContainer->Reflow(this, aPresContext, aReflowInput, aStatus,
-                              containingBlock, flags,
-                              &aDesiredSize.mOverflowAreas);
+    absoluteContainer->Reflow(
+        this, aPresContext, aReflowInput, aStatus,
+        containingBlock.GetPhysicalRect(wm, aDesiredSize.PhysicalSize()), flags,
+        &aDesiredSize.mOverflowAreas);
   }
 }
 
