@@ -11059,7 +11059,7 @@
 
 # Enable the support to position absoluetly positioned frames properly across
 # fragmentainers (Bug 1994316).
-- name: layout.abspos.fragment-aware-positioning.enabled
+- name: layout.abspos.fragmentainer-aware-positioning.enabled
   type: bool
   value: true
   mirror: always

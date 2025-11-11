@@ -89,7 +89,7 @@ void AbsoluteContainingBlock::RemoveFrame(FrameDestroyContext& aContext,
                                           nsIFrame* aOldFrame) {
   NS_ASSERTION(mChildListID == aListID, "unexpected child list");
 
-  if (!StaticPrefs::layout_abspos_fragment_aware_positioning_enabled()) {
+  if (!StaticPrefs::layout_abspos_fragmentainer_aware_positioning_enabled()) {
     if (nsIFrame* nif = aOldFrame->GetNextInFlow()) {
       nif->GetParent()->DeleteNextInFlowChild(aContext, nif, false);
     }
@@ -113,7 +113,7 @@ nsFrameList AbsoluteContainingBlock::StealPushedChildList() {
 
 bool AbsoluteContainingBlock::PrepareAbsoluteFrames(
     nsContainerFrame* aDelegatingFrame) {
-  if (!StaticPrefs::layout_abspos_fragment_aware_positioning_enabled()) {
+  if (!StaticPrefs::layout_abspos_fragmentainer_aware_positioning_enabled()) {
     return HasAbsoluteFrames();
   }
 
@@ -338,7 +338,8 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
       MOZ_ASSERT(!kidStatus.IsInlineBreakBefore(),
                  "ShouldAvoidBreakInside should prevent this from happening");
       nsIFrame* nextFrame = kidFrame->GetNextInFlow();
-      if (StaticPrefs::layout_abspos_fragment_aware_positioning_enabled()) {
+      if (StaticPrefs::
+              layout_abspos_fragmentainer_aware_positioning_enabled()) {
         if (!kidStatus.IsFullyComplete()) {
           if (!nextFrame) {
             nextFrame = aPresContext->PresShell()
@@ -383,7 +384,8 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
       }
     } else {
       if (aOverflowAreas) {
-        if (!StaticPrefs::layout_abspos_fragment_aware_positioning_enabled()) {
+        if (!StaticPrefs::
+                layout_abspos_fragmentainer_aware_positioning_enabled()) {
           tracker.Skip(kidFrame, reflowStatus);
         }
         aDelegatingFrame->ConsiderChildOverflow(*aOverflowAreas, kidFrame);

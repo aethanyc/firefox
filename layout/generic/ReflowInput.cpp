@@ -2209,7 +2209,7 @@ void ReflowInput::InitConstraints(
     if (aContainingBlockSize.isNothing()) {
       cbSize = ComputeContainingBlockRectangle(aPresContext, cbri);
     } else if (StaticPrefs::
-                   layout_abspos_fragment_aware_positioning_enabled() &&
+                   layout_abspos_fragmentainer_aware_positioning_enabled() &&
                mFrame->IsAbsolutelyPositioned(mStyleDisplay) &&
                mFrame->GetPrevInFlow()) {
       // AbsoluteContainingBlock always provides a containing-block size to
