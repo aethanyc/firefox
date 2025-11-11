@@ -11061,7 +11061,7 @@
 # fragmentainers (Bug 1994316).
 - name: layout.abspos.fragment-aware-positioning.enabled
   type: bool
-  value: false
+  value: true
   mirror: always
 
 #---------------------------------------------------------------------------
