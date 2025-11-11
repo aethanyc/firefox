@@ -1153,6 +1153,10 @@ void nsContainerFrame::DisplayOverflowContainers(
 
 void nsContainerFrame::DisplayAbsoluteFrames(nsDisplayListBuilder* aBuilder,
                                              const nsDisplayListSet& aLists) {
+  if (!StaticPrefs::layout_abspos_fragmentainer_aware_positioning_enabled()) {
+    return;
+  }
+
   MOZ_ASSERT(GetPrevInFlow(),
              "This method is to build display list for child frames that has "
              "no placeholders in current container's principal child list.");
