@@ -1355,12 +1355,17 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
         kidAvailBSize -= kidReflowInput.ComputedLogicalMargin(wm).BStart(wm);
         const nscoord kidOffsetBStart =
             kidReflowInput.ComputedLogicalOffsets(wm).BStart(wm);
+        fmt::println(FMT_STRING("kidOffsetBStart {}"), kidOffsetBStart);
         if (kidOffsetBStart != NS_AUTOOFFSET) {
           kidAvailBSize -= kidOffsetBStart;
         }
         kidReflowInput.SetAvailableBSize(kidAvailBSize);
       }
     }
+
+    fmt::println(
+        FMT_STRING("In ReflowAbsoluteFrame: availSize {}, kid availSize {}"),
+        ToString(availSize), ToString(kidReflowInput.AvailableSize()));
 
     // Do the reflow
     ReflowOutput kidDesiredSize(kidReflowInput);
