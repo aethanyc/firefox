@@ -14,12 +14,10 @@
 #include "LayoutLogging.h"
 #include "PresShell.h"
 #include "StickyScrollContainer.h"
-#include "fmt/format.h"
 #include "mozilla/ScrollContainerFrame.h"
 #include "mozilla/WritingModes.h"
 #include "mozilla/dom/HTMLInputElement.h"
 #include "nsBlockFrame.h"
-#include "nsContainerFrame.h"
 #include "nsFlexContainerFrame.h"
 #include "nsFontInflationData.h"
 #include "nsFontMetrics.h"
@@ -1227,9 +1225,6 @@ ReflowInput::GetHypotheticalBoxContainer(const nsIFrame* aFrame) const {
     LogicalSize computedSize = ri->ComputedSize(wm);
     computedSize.BSize(wm) = std::min(ri->AvailableBSize() - bp.BStartEnd(wm),
                                       computedSize.BSize(wm));
-    printf("cb ri avail bsize %d, computed size %s\n", ri->AvailableBSize(),
-           ToString(computedSize).c_str());
-
     return {cb, bp, computedSize};
   }
 
@@ -1352,12 +1347,6 @@ void ReflowInput::CalculateHypotheticalPosition(
   const auto [blockContainer, blockContainerBP, blockContainerContentBoxSize] =
       GetHypotheticalBoxContainer(aPlaceholderFrame);
 
-  fmt::println(
-      FMT_STRING("blockContainer {}, blockContainerBP {}, "
-                 "blockContainerContentBoxSize {}, aCBPaddingBoxSize {}"),
-      blockContainer->ListTag().get(), ToString(blockContainerBP),
-      ToString(blockContainerContentBoxSize), ToString(aCBPaddingBoxSize));
-
   WritingMode wm = blockContainer->GetWritingMode();
   const nscoord blockContainerContentIStart = blockContainerBP.IStart(wm);
 
@@ -1436,11 +1425,6 @@ void ReflowInput::CalculateHypotheticalPosition(
   LogicalPoint placeholderOffset(
       wm, aPlaceholderFrame->GetOffsetToIgnoringScrolling(blockContainer),
       blockContainerSize);
-
-  fmt::println(
-      FMT_STRING("physical placeholder offset {}, placeholderOffset {}"),
-      ToString(aPlaceholderFrame->GetOffsetToIgnoringScrolling(blockContainer)),
-      ToString(placeholderOffset));
 
   // First, determine the hypothetical box's mBStart.  We want to check the
   // content insertion frame of blockContainer for block-ness, but make
