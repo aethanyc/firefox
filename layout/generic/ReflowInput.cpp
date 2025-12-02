@@ -14,10 +14,12 @@
 #include "LayoutLogging.h"
 #include "PresShell.h"
 #include "StickyScrollContainer.h"
+#include "fmt/format.h"
 #include "mozilla/ScrollContainerFrame.h"
 #include "mozilla/WritingModes.h"
 #include "mozilla/dom/HTMLInputElement.h"
 #include "nsBlockFrame.h"
+#include "nsContainerFrame.h"
 #include "nsFlexContainerFrame.h"
 #include "nsFontInflationData.h"
 #include "nsFontMetrics.h"
@@ -1219,7 +1221,16 @@ ReflowInput::GetHypotheticalBoxContainer(const nsIFrame* aFrame) const {
 
   const WritingMode wm = cb->GetWritingMode();
   if (ri) {
-    return {cb, ri->ComputedLogicalBorderPadding(wm), ri->ComputedSize(wm)};
+    LogicalMargin bp = ri->ComputedLogicalBorderPadding(wm).ApplySkipSides(
+        static_cast<nsContainerFrame*>(cb)
+            ->PreReflowBlockLevelLogicalSkipSides());
+    LogicalSize computedSize = ri->ComputedSize(wm);
+    computedSize.BSize(wm) = std::min(ri->AvailableBSize() - bp.BStartEnd(wm),
+                                      computedSize.BSize(wm));
+    printf("cb ri avail bsize %d, computed size %s\n", ri->AvailableBSize(),
+           ToString(computedSize).c_str());
+
+    return {cb, bp, computedSize};
   }
 
   // Didn't find a ReflowInput for cb. Just compute the information we want, on
@@ -1340,6 +1351,13 @@ void ReflowInput::CalculateHypotheticalPosition(
   WritingMode cbwm = aCBReflowInput->GetWritingMode();
   const auto [blockContainer, blockContainerBP, blockContainerContentBoxSize] =
       GetHypotheticalBoxContainer(aPlaceholderFrame);
+
+  fmt::println(
+      FMT_STRING("blockContainer {}, blockContainerBP {}, "
+                 "blockContainerContentBoxSize {}, aCBPaddingBoxSize {}"),
+      blockContainer->ListTag().get(), ToString(blockContainerBP),
+      ToString(blockContainerContentBoxSize), ToString(aCBPaddingBoxSize));
+
   WritingMode wm = blockContainer->GetWritingMode();
   const nscoord blockContainerContentIStart = blockContainerBP.IStart(wm);
 
@@ -1412,11 +1430,17 @@ void ReflowInput::CalculateHypotheticalPosition(
   // Get the placeholder offset in the coordinate space of its block container.
   // XXXbz the placeholder is not fully reflowed yet if our containing block is
   // relatively positioned...
-  const nsSize blockContainerSize = BorderBoxSizeAsContainerIfConstrained(
+  nsSize blockContainerSize = BorderBoxSizeAsContainerIfConstrained(
       wm, blockContainerContentBoxSize, blockContainerBP);
+
   LogicalPoint placeholderOffset(
       wm, aPlaceholderFrame->GetOffsetToIgnoringScrolling(blockContainer),
       blockContainerSize);
+
+  fmt::println(
+      FMT_STRING("physical placeholder offset {}, placeholderOffset {}"),
+      ToString(aPlaceholderFrame->GetOffsetToIgnoringScrolling(blockContainer)),
+      ToString(placeholderOffset));
 
   // First, determine the hypothetical box's mBStart.  We want to check the
   // content insertion frame of blockContainer for block-ness, but make
@@ -1549,7 +1573,11 @@ void ReflowInput::CalculateHypotheticalPosition(
     // to the border-box size (cbSize) that we are computing.
     cbSize = aCBPaddingBoxSize.GetPhysicalSize(cbwm);
   } else {
-    cbSize = aCBReflowInput->ComputedSizeAsContainerIfConstrained();
+    const auto border =
+        aCBReflowInput->ComputedLogicalBorder(cbwm).ApplySkipSides(
+            static_cast<const nsContainerFrame*>(cbFrame)
+                ->PreReflowBlockLevelLogicalSkipSides());
+    cbSize = (aCBPaddingBoxSize + border.Size(cbwm)).GetPhysicalSize(cbwm);
   }
 
   LogicalPoint logCBOffs(wm, cbOffset, cbSize - blockContainerSize);
