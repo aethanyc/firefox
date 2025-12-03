@@ -4235,7 +4235,11 @@ void nsIFrame::BuildDisplayListForChild(nsDisplayListBuilder* aBuilder,
                           : nullptr;
   nsIFrame* childOrOutOfFlow =
       placeholder ? placeholder->GetOutOfFlowFrame() : child;
+  if (placeholder) {
+    printf("childOrOutOfFlow %s\n", childOrOutOfFlow->ListTag().get());
+  }
   if (ShouldSkipFrame(aBuilder, childOrOutOfFlow)) {
+    printf("ShouldSkip childOrOutOfFlow %p\n", childOrOutOfFlow);
     return;
   }
 
