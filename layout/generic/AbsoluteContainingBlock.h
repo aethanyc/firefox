@@ -171,13 +171,16 @@ class AbsoluteContainingBlock {
                                      const LogicalSize& aKidSize,
                                      LogicalMargin& aMargin,
                                      const LogicalMargin& aOffsets);
-
+  enum class ReflowMode : uint8_t {
+    Measuring,
+    Final,
+  };
   void ReflowAbsoluteFrame(
       nsContainerFrame* aDelegatingFrame, nsPresContext* aPresContext,
       const ReflowInput& aReflowInput,
       const nsRect& aOriginalContainingBlockRect, AbsPosReflowFlags aFlags,
       nsIFrame* aKidFrame, nsReflowStatus& aStatus,
-      OverflowAreas* aOverflowAreas,
+      OverflowAreas* aOverflowAreas, ReflowMode aReflowMode,
       mozilla::AnchorPosResolutionCache* aAnchorPosResolutionCache = nullptr);
 
   /**
@@ -200,6 +203,8 @@ class AbsoluteContainingBlock {
   // to be reflowed by the delegating frame's next-in-flow after transferring
   // them to its own AbsoluteContainingBlock.
   nsFrameList mPushedAbsoluteFrames;
+
+  nscoord mCumulativeBSize = 0;
 
 #ifdef DEBUG
   // FrameChildListID::Fixed or FrameChildListID::Absolute

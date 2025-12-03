@@ -12,11 +12,13 @@
 #include "mozilla/AbsoluteContainingBlock.h"
 
 #include "AnchorPositioningUtils.h"
+#include "LayoutConstants.h"
 #include "fmt/format.h"
 #include "mozilla/CSSAlignUtils.h"
 #include "mozilla/DebugOnly.h"
 #include "mozilla/PresShell.h"
 #include "mozilla/ReflowInput.h"
+#include "mozilla/ReflowOutput.h"
 #include "mozilla/ViewportFrame.h"
 #include "mozilla/dom/ViewTransition.h"
 #include "nsAtomicContainerFrame.h"
@@ -261,6 +263,12 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
     aOverflowAreas = nullptr;
   }
 
+  if (aDelegatingFrame->GetPrevInFlow()) {
+    const auto* prevAbsCB =
+        aDelegatingFrame->GetPrevInFlow()->GetAbsoluteContainingBlock();
+    mCumulativeBSize = prevAbsCB->mCumulativeBSize;
+  }
+
   nsReflowStatus reflowStatus;
   const bool reflowAll = aReflowInput.ShouldReflowAllKids();
   const bool cbWidthChanged = aFlags.contains(AbsPosReflowFlag::CBWidthChanged);
@@ -317,13 +325,61 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
         }
       }
     }
+    bool needPush = false;
     if (kidNeedsReflow && !aPresContext->HasPendingInterrupt()) {
+      OverflowAreas tentativeOverflowAreas;
       // Reflow the frame
       nsReflowStatus kidStatus;
-      ReflowAbsoluteFrame(aDelegatingFrame, aPresContext, aReflowInput,
-                          aContainingBlock, aFlags, kidFrame, kidStatus,
-                          aOverflowAreas,
-                          anchorPosResolutionCache.ptrOr(nullptr));
+      if (!aDelegatingFrame->GetPrevInFlow()) {
+        ReflowAbsoluteFrame(aDelegatingFrame, aPresContext, aReflowInput,
+                            aContainingBlock, aFlags, kidFrame, kidStatus,
+                            &tentativeOverflowAreas, ReflowMode::Measuring,
+                            anchorPosResolutionCache.ptrOr(nullptr));
+
+        printf("(measuring reflow) abspos kid: %s pos %s\n",
+               kidFrame->ListTag().get(),
+               ToString(kidFrame->GetPosition()).c_str());
+      }
+
+      nscoord availBSize = aReflowInput.AvailableBSize();
+      if (!kidFrame->GetPrevInFlow() && availBSize != NS_UNCONSTRAINEDSIZE) {
+        const LogicalMargin border =
+            aDelegatingFrame->GetLogicalUsedBorder(containerWM)
+                .ApplySkipSides(
+                    aDelegatingFrame->PreReflowBlockLevelLogicalSkipSides());
+        availBSize -= border.BStart(containerWM);
+        const LogicalSize cbSize(containerWM, aContainingBlock.Size());
+        const nsSize cbBorderBoxSize =
+            (cbSize + border.Size(containerWM)).GetPhysicalSize(containerWM);
+        const auto wm = kidFrame->GetWritingMode();
+        const nscoord kidBPos =
+            kidFrame->GetLogicalPosition(cbBorderBoxSize).B(wm) -
+            mCumulativeBSize;
+
+        if (kidBPos >= availBSize) {
+          needPush = true;
+        }
+        printf("mCumulativeBSize %d, kidBPos %d\n", mCumulativeBSize, kidBPos);
+      }
+
+      if (needPush) {
+        StealFrame(kidFrame);
+        mPushedAbsoluteFrames.AppendFrame(nullptr, kidFrame);
+        printf("kidFrame %s needs to push to absCB's continuation! status %s\n",
+               kidFrame->ListTag().get(), ToString(kidStatus).c_str());
+      } else {
+        // XXX: Investigate conditions to skip reflow.
+        kidStatus.Reset();
+        ReflowAbsoluteFrame(aDelegatingFrame, aPresContext, aReflowInput,
+                            aContainingBlock, aFlags, kidFrame, kidStatus,
+                            aOverflowAreas, ReflowMode::Final,
+                            anchorPosResolutionCache.ptrOr(nullptr));
+
+        printf("(final reflow) abspos kid: %s pos %s\n",
+               kidFrame->ListTag().get(),
+               ToString(kidFrame->GetPosition()).c_str());
+      }
+
       MOZ_ASSERT(!kidStatus.IsInlineBreakBefore(),
                  "ShouldAvoidBreakInside should prevent this from happening");
       nsIFrame* nextFrame = kidFrame->GetNextInFlow();
@@ -403,9 +459,15 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
     }
   }
 
+  // XXX: Need to subtract the border.
+  mCumulativeBSize += aReflowInput.AvailableBSize();
+
+  printf("Prev delegating frame %p, mCumulativeBSize %d\n",
+         aDelegatingFrame->GetPrevInFlow(), mCumulativeBSize);
+
   // Abspos frames can't cause their parent to be incomplete,
   // only overflow incomplete.
-  if (reflowStatus.IsIncomplete()) {
+  if (reflowStatus.IsIncomplete() || mPushedAbsoluteFrames.NotEmpty()) {
     reflowStatus.SetOverflowIncomplete();
     reflowStatus.SetNextInFlowNeedsReflow();
   }
@@ -1116,7 +1178,7 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
     nsContainerFrame* aDelegatingFrame, nsPresContext* aPresContext,
     const ReflowInput& aReflowInput, const nsRect& aOriginalContainingBlockRect,
     AbsPosReflowFlags aFlags, nsIFrame* aKidFrame, nsReflowStatus& aStatus,
-    OverflowAreas* aOverflowAreas,
+    OverflowAreas* aOverflowAreas, ReflowMode aReflowMode,
     AnchorPosResolutionCache* aAnchorPosResolutionCache) {
   MOZ_ASSERT(aStatus.IsEmpty(), "Caller should pass a fresh reflow status!");
 
@@ -1297,6 +1359,8 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
     }
 
     const bool kidFrameMaySplit =
+        aReflowMode == ReflowMode::Final &&
+
         aReflowInput.AvailableBSize() != NS_UNCONSTRAINEDSIZE &&
 
         // Don't split if told not to (e.g. for fixed frames)
@@ -1308,13 +1372,7 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
 
         // Bug 1588623: Support splitting absolute positioned multicol
         // containers.
-        !aKidFrame->IsColumnSetWrapperFrame() &&
-
-        // Don't split things below the fold. (Ideally we shouldn't *have*
-        // anything totally below the fold, but we can't position frames
-        // across next-in-flow breaks yet. (Bug 1994346)
-        (aKidFrame->GetLogicalRect(cb.mRect.Size()).BStart(wm) <=
-         aReflowInput.AvailableBSize());
+        !aKidFrame->IsColumnSetWrapperFrame();
 
     // Get the border values
     const LogicalMargin border =
@@ -1335,7 +1393,7 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
       // any border that their containing block parent might have (including
       // borders generated by 'box-decoration-break:clone').
       if (!kidPrevInFlow) {
-        availBSize -= border.BStart(outerWM);
+        // availBSize -= border.BStart(outerWM);
       }
     } else {
       availBSize = NS_UNCONSTRAINEDSIZE;
@@ -1351,14 +1409,16 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
     // account for kid's constraints in its own writing-mode if needed.
     if (!kidPrevInFlow) {
       nscoord kidAvailBSize = kidReflowInput.AvailableBSize();
+      printf("adjusting kidAvailBSize %d\n", kidAvailBSize);
       if (kidAvailBSize != NS_UNCONSTRAINEDSIZE) {
-        kidAvailBSize -= kidReflowInput.ComputedLogicalMargin(wm).BStart(wm);
+        const nsSize cbBorderBoxSize =
+            (cbSize + border.Size(outerWM)).GetPhysicalSize(outerWM);
         const nscoord kidOffsetBStart =
-            kidReflowInput.ComputedLogicalOffsets(wm).BStart(wm);
-        if (kidOffsetBStart != NS_AUTOOFFSET) {
-          kidAvailBSize -= kidOffsetBStart;
-        }
+            aKidFrame->GetLogicalPosition(cbBorderBoxSize).B(wm) -
+            mCumulativeBSize;
+        kidAvailBSize -= kidOffsetBStart;
         kidReflowInput.SetAvailableBSize(kidAvailBSize);
+        printf("kidAvailBSize %d\n", kidAvailBSize);
       }
     }
 
@@ -1379,6 +1439,9 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
       const LogicalRect kidRect(outerWM, kidPos, kidSize);
       aKidFrame->SetRect(outerWM, kidRect, cbBorderBoxSize);
     } else {
+      // XXX: We probably don't need to compute margin and offset again in final
+      // reflow.
+
       // Position the child relative to our padding edge.
       const LogicalSize kidSize = kidDesiredSize.Size(outerWM);
 
@@ -1485,6 +1548,11 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
       LogicalRect rect(
           outerWM, offsets.StartOffset(outerWM) + margin.StartOffset(outerWM),
           kidSize);
+
+      printf("rect %s, mCumulativeBSize %d\n", ToString(rect).c_str(),
+             mCumulativeBSize);
+      rect.BStart(outerWM) -= mCumulativeBSize;
+
       nsRect r = rect.GetPhysicalRect(outerWM, cbSize.GetPhysicalSize(outerWM));
 
       // So far, we've positioned against the padding edge of the containing
@@ -1495,6 +1563,9 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
         // Push the frame out to where the anchor is.
         r += cb.mAnchorShiftInfo->mOffset;
       }
+
+      printf("(after) rect %s, cb.mRect %s\n", ToString(rect).c_str(),
+             ToString(cb.mRect).c_str());
 
       aKidFrame->SetRect(r);
 
@@ -1601,6 +1672,7 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
     if (position == oldPosition) {
       return;
     }
+    printf("SetPosition again?\n");
     aKidFrame->SetPosition(position);
     aKidFrame->UpdateOverflow();
   }();
