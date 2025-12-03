@@ -8,6 +8,7 @@
 
 #include "nsColumnSetFrame.h"
 
+#include "mozilla/Assertions.h"
 #include "mozilla/ColumnUtils.h"
 #include "mozilla/Logging.h"
 #include "mozilla/PresShell.h"
@@ -755,6 +756,10 @@ nsColumnSetFrame::ColumnBalanceData nsColumnSetFrame::ReflowColumns(
           __func__, colData.mColCount, child, ToString(aStatus).c_str(),
           kidDesiredSize.ISize(wm), kidDesiredSize.BSize(wm), childContentBEnd,
           kidDesiredSize.mCarriedOutBEndMargin.Get());
+    }
+
+    if (colData.mColCount == 10) {
+      MOZ_ASSERT_UNREACHABLE();
     }
 
     contentRect.UnionRect(contentRect, child->GetRect());

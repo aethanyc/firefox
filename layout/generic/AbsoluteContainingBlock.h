@@ -201,6 +201,8 @@ class AbsoluteContainingBlock {
   // them to its own AbsoluteContainingBlock.
   nsFrameList mPushedAbsoluteFrames;
 
+  nscoord mCumulativeBSize = 0;
+
 #ifdef DEBUG
   // FrameChildListID::Fixed or FrameChildListID::Absolute
   FrameChildListID const mChildListID;
