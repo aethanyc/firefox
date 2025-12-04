@@ -1835,8 +1835,6 @@ void ReflowInput::InitAbsoluteConstraints(const ReflowInput* aCBReflowInput,
   LogicalMargin margin = ComputedLogicalMargin(cbwm);
   const LogicalMargin borderPadding = ComputedLogicalBorderPadding(cbwm);
 
-  bool iSizeIsAuto =
-      mStylePosition->ISize(cbwm, anchorResolutionParams.mBaseParams)->IsAuto();
   bool marginIStartIsAuto = false;
   bool marginIEndIsAuto = false;
   bool marginBStartIsAuto = false;
@@ -1858,13 +1856,9 @@ void ReflowInput::InitAbsoluteConstraints(const ReflowInput* aCBReflowInput,
   mFlags.mDeferAutoMarginComputation =
       nonZeroAutoMarginOnUnconstrainedSize || hasIntrinsicKeywordForBSize;
   if (iStartIsAuto) {
-    // We know 'right' is not 'auto' anymore thanks to the hypothetical
-    // box code above.
-    // Solve for 'left'.
-    if (iSizeIsAuto) {
-      // XXXldb This, and the corresponding code in
-      // AbsoluteContainingBlock.cpp, could probably go away now that
-      // we always compute widths.
+    // We know 'inset-inline-end' is not 'auto' anymore thanks to the
+    // hypothetical box code above. Solve for 'inset-inline-start'.
+    if (computedSize.ISize(cbwm) == NS_UNCONSTRAINEDSIZE) {
       offsets.IStart(cbwm) = NS_AUTOOFFSET;
     } else {
       offsets.IStart(cbwm) = aCBSize.ISize(cbwm) - offsets.IEnd(cbwm) -
@@ -1872,13 +1866,9 @@ void ReflowInput::InitAbsoluteConstraints(const ReflowInput* aCBReflowInput,
                              borderPadding.IStartEnd(cbwm);
     }
   } else if (iEndIsAuto) {
-    // We know 'left' is not 'auto' anymore thanks to the hypothetical
-    // box code above.
-    // Solve for 'right'.
-    if (iSizeIsAuto) {
-      // XXXldb This, and the corresponding code in
-      // AbsoluteContainingBlock.cpp, could probably go away now that
-      // we always compute widths.
+    // We know 'inset-inline-start' is not 'auto' anymore thanks to the
+    // hypothetical box code above. Solve for 'inset-inline-end'.
+    if (computedSize.ISize(cbwm) == NS_UNCONSTRAINEDSIZE) {
       offsets.IEnd(cbwm) = NS_AUTOOFFSET;
     } else {
       offsets.IEnd(cbwm) = aCBSize.ISize(cbwm) - offsets.IStart(cbwm) -
@@ -1909,12 +1899,9 @@ void ReflowInput::InitAbsoluteConstraints(const ReflowInput* aCBReflowInput,
                                   marginIEndIsAuto, margin);
   }
 
-  bool bSizeIsAuto =
-      mStylePosition->BSize(cbwm, anchorResolutionParams.mBaseParams)
-          ->BehavesLikeInitialValueOnBlockAxis();
   if (bStartIsAuto) {
-    // solve for block-start
-    if (bSizeIsAuto) {
+    // Solve for 'inset-block-start'.
+    if (computedSize.BSize(cbwm) == NS_UNCONSTRAINEDSIZE) {
       offsets.BStart(cbwm) = NS_AUTOOFFSET;
     } else {
       offsets.BStart(cbwm) = aCBSize.BSize(cbwm) - margin.BStartEnd(cbwm) -
@@ -1922,8 +1909,8 @@ void ReflowInput::InitAbsoluteConstraints(const ReflowInput* aCBReflowInput,
                              computedSize.BSize(cbwm) - offsets.BEnd(cbwm);
     }
   } else if (bEndIsAuto) {
-    // solve for block-end
-    if (bSizeIsAuto) {
+    // Solve for 'inset-block-end'.
+    if (computedSize.BSize(cbwm) == NS_UNCONSTRAINEDSIZE) {
       offsets.BEnd(cbwm) = NS_AUTOOFFSET;
     } else {
       offsets.BEnd(cbwm) = aCBSize.BSize(cbwm) - margin.BStartEnd(cbwm) -
