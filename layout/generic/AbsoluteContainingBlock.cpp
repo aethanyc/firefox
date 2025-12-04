@@ -275,6 +275,17 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
   const bool cbHeightChanged =
       aFlags.contains(AbsPosReflowFlag::CBHeightChanged);
   nsOverflowContinuationTracker tracker(aDelegatingFrame, true);
+  const WritingMode containerWM = aReflowInput.GetWritingMode();
+
+  nscoord availBSize = aReflowInput.AvailableBSize();
+  const LogicalMargin border =
+      aDelegatingFrame->GetLogicalUsedBorder(containerWM)
+          .ApplySkipSides(
+              aDelegatingFrame->PreReflowBlockLevelLogicalSkipSides());
+  if (availBSize != NS_UNCONSTRAINEDSIZE) {
+    availBSize -= border.BStart(containerWM);
+  }
+
   for (nsIFrame* kidFrame : mAbsoluteFrames) {
     Maybe<AnchorPosResolutionCache> anchorPosResolutionCache;
     if (kidFrame->HasAnchorPosReference()) {
@@ -294,8 +305,6 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
       MaybeMarkAncestorsAsHavingDescendantDependentOnItsStaticPos(
           kidFrame, aDelegatingFrame);
     }
-    const nscoord availBSize = aReflowInput.AvailableBSize();
-    const WritingMode containerWM = aReflowInput.GetWritingMode();
     if (!kidNeedsReflow && availBSize != NS_UNCONSTRAINEDSIZE) {
       // If we need to redo pagination on the kid, we need to reflow it.
       // This can happen either if the available height shrunk and the
@@ -330,6 +339,8 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
       OverflowAreas tentativeOverflowAreas;
       // Reflow the frame
       nsReflowStatus kidStatus;
+
+      // XXX: under what condition should we perform measuring reflow?
       if (!aDelegatingFrame->GetPrevInFlow()) {
         ReflowAbsoluteFrame(aDelegatingFrame, aPresContext, aReflowInput,
                             aContainingBlock, aFlags, kidFrame, kidStatus,
@@ -340,14 +351,7 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
                kidFrame->ListTag().get(),
                ToString(kidFrame->GetPosition()).c_str());
       }
-
-      nscoord availBSize = aReflowInput.AvailableBSize();
       if (!kidFrame->GetPrevInFlow() && availBSize != NS_UNCONSTRAINEDSIZE) {
-        const LogicalMargin border =
-            aDelegatingFrame->GetLogicalUsedBorder(containerWM)
-                .ApplySkipSides(
-                    aDelegatingFrame->PreReflowBlockLevelLogicalSkipSides());
-        availBSize -= border.BStart(containerWM);
         const LogicalSize cbSize(containerWM, aContainingBlock.Size());
         const nsSize cbBorderBoxSize =
             (cbSize + border.Size(containerWM)).GetPhysicalSize(containerWM);
@@ -459,8 +463,7 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
     }
   }
 
-  // XXX: Need to subtract the border.
-  mCumulativeBSize += aReflowInput.AvailableBSize();
+  mCumulativeBSize += availBSize;
 
   printf("Prev delegating frame %p, mCumulativeBSize %d\n",
          aDelegatingFrame->GetPrevInFlow(), mCumulativeBSize);
@@ -1411,12 +1414,20 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
       nscoord kidAvailBSize = kidReflowInput.AvailableBSize();
       printf("adjusting kidAvailBSize %d\n", kidAvailBSize);
       if (kidAvailBSize != NS_UNCONSTRAINEDSIZE) {
-        const nsSize cbBorderBoxSize =
-            (cbSize + border.Size(outerWM)).GetPhysicalSize(outerWM);
-        const nscoord kidOffsetBStart =
-            aKidFrame->GetLogicalPosition(cbBorderBoxSize).B(wm) -
-            mCumulativeBSize;
-        kidAvailBSize -= kidOffsetBStart;
+        // const nsSize cbBorderBoxSize =
+        //     (cbSize + border.Size(outerWM)).GetPhysicalSize(outerWM);
+        // const nscoord kidOffsetBStart =
+        //     aKidFrame->GetLogicalPosition(cbBorderBoxSize).B(wm) -
+        //     mCumulativeBSize;
+        // kidAvailBSize -= kidOffsetBStart;
+        kidAvailBSize -= kidReflowInput.ComputedLogicalMargin(wm).BStart(wm);
+        nscoord kidOffsetBStart =
+            kidReflowInput.ComputedLogicalOffsets(wm).BStart(wm);
+        printf("kidOffsetBStart %d\n", kidOffsetBStart);
+        if (kidOffsetBStart != NS_AUTOOFFSET) {
+          kidOffsetBStart -= mCumulativeBSize;
+          kidAvailBSize -= kidOffsetBStart;
+        }
         kidReflowInput.SetAvailableBSize(kidAvailBSize);
         printf("kidAvailBSize %d\n", kidAvailBSize);
       }
