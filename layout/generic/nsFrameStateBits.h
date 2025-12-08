@@ -193,6 +193,12 @@ FRAME_STATE_BIT(Generic, 33, NS_FRAME_DRAWING_AS_PAINTSERVER)
 FRAME_STATE_BIT(Generic, 34,
                 NS_FRAME_DESCENDANT_INTRINSIC_ISIZE_DEPENDS_ON_BSIZE)
 
+// This bit is set on absolutely positioned frames whose parent does not contain
+// their placeholder. This can happen for two reasons: (1) the abspos frame was
+// split, and this piece is the continuation, or (2) the entire abspos frame
+// didn't fit on the fragmentainer (e.g. page/column).
+FRAME_STATE_BIT(Generic, 35, NS_FRAME_IS_PUSHED_ABSPOS)
+
 // Frame is a display root and the retained layer tree needs to be updated
 // at the next paint via display list construction.
 // Only meaningful for display roots, so we don't really need a global state
