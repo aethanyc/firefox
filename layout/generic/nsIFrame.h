@@ -1415,6 +1415,11 @@ class nsIFrame : public nsQueryFrame {
   NS_DECLARE_FRAME_PROPERTY_WITHOUT_DTOR(IBSplitSibling, nsContainerFrame)
   NS_DECLARE_FRAME_PROPERTY_WITHOUT_DTOR(IBSplitPrevSibling, nsContainerFrame)
 
+  // In a fragmented context, store an absolutely positioned frame's physical
+  // position as if it is unfragmented. It will be set after the frame is
+  // reflowed under unconstrained available block-size.
+  NS_DECLARE_FRAME_PROPERTY_SMALL_VALUE(UnfragmentedPositionProperty, nsPoint)
+
   NS_DECLARE_FRAME_PROPERTY_SMALL_VALUE(NormalPositionProperty, nsPoint)
   NS_DECLARE_FRAME_PROPERTY_DELETABLE(ComputedOffsetProperty, nsMargin)
 
