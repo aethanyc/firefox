@@ -341,10 +341,12 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
       nsReflowStatus kidStatus;
 
       // XXX: under what condition should we perform measuring reflow?
-      if (!aDelegatingFrame->GetPrevInFlow()) {
+      if (!kidFrame->GetPrevInFlow()) {
+        const auto measuringReflowFlag =
+            aFlags - AbsPosReflowFlag::AllowFragmentation;
         ReflowAbsoluteFrame(aDelegatingFrame, aPresContext, aReflowInput,
-                            aContainingBlock, aFlags, kidFrame, kidStatus,
-                            &tentativeOverflowAreas, ReflowMode::Measuring,
+                            aContainingBlock, measuringReflowFlag, kidFrame,
+                            kidStatus, &tentativeOverflowAreas,
                             anchorPosResolutionCache.ptrOr(nullptr));
 
         printf("(measuring reflow) abspos kid: %s pos %s\n",
@@ -376,7 +378,7 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
         kidStatus.Reset();
         ReflowAbsoluteFrame(aDelegatingFrame, aPresContext, aReflowInput,
                             aContainingBlock, aFlags, kidFrame, kidStatus,
-                            aOverflowAreas, ReflowMode::Final,
+                            aOverflowAreas,
                             anchorPosResolutionCache.ptrOr(nullptr));
 
         printf("(final reflow) abspos kid: %s pos %s\n",

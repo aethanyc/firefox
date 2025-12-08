@@ -14,6 +14,7 @@
 #include "mozilla/AbsoluteContainingBlock.h"
 #include "mozilla/AutoRestore.h"
 #include "mozilla/ComputedStyle.h"
+#include "mozilla/Logging.h"
 #include "mozilla/PresShell.h"
 #include "mozilla/dom/Document.h"
 #include "mozilla/dom/HTMLSummaryElement.h"
@@ -1021,8 +1022,11 @@ void nsContainerFrame::DisplayOverflowContainers(
 void nsContainerFrame::DisplayAbsoluteContinuations(
     nsDisplayListBuilder* aBuilder, const nsDisplayListSet& aLists) {
   for (nsIFrame* frame : GetChildList(FrameChildListID::Absolute)) {
-    if (frame->GetPrevInFlow() ||
-        frame->GetInFlowParent() != frame->GetParent()) {
+    // printf("Is %s a proper ancestor of %s? %s\n", ListTag().get(),
+    //        frame->FirstInFlow()->GetPlaceholderFrame()->ListTag().get(),
+    //        YesOrNo(nsLayoutUtils::IsProperAncestorFrame(
+    //            this, frame->GetPlaceholderFrame())));
+    if (frame->GetPrevInFlow()) {
       BuildDisplayListForChild(aBuilder, frame, aLists);
     }
   }
