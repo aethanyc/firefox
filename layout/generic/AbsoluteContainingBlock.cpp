@@ -144,6 +144,9 @@ bool AbsoluteContainingBlock::PrepareAbsoluteFrames(
         child->GetPrevInFlow()->GetParent() != aDelegatingFrame) {
       mPushedAbsoluteFrames.RemoveFrame(child);
       mAbsoluteFrames.AppendFrame(nullptr, child);
+      if (!child->GetPrevInFlow()) {
+        child->RemoveStateBits(NS_FRAME_IS_PUSHED_OUT_OF_FLOW);
+      }
     }
     child = next;
   }
@@ -343,6 +346,7 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
                             ->FrameConstructor()
                             ->CreateContinuingFrame(kidFrame, aDelegatingFrame);
             mPushedAbsoluteFrames.AppendFrame(nullptr, nextFrame);
+            nextFrame->AddStateBits(NS_FRAME_IS_PUSHED_OUT_OF_FLOW);
           } else if (nextFrame->GetParent() !=
                      aDelegatingFrame->GetNextInFlow()) {
             nextFrame->GetParent()->GetAbsoluteContainingBlock()->StealFrame(
