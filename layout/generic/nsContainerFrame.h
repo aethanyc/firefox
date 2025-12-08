@@ -442,6 +442,7 @@ class nsContainerFrame : public nsSplittableFrame {
    * Note: for absolute frame's first-in-flow, it will be painted through its
    * placeholder frame.
    */
+  // TODO(TYLin): Rename this method.
   void DisplayAbsoluteContinuations(nsDisplayListBuilder* aBuilder,
                                     const nsDisplayListSet& aLists);
 

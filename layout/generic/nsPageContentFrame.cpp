@@ -5,6 +5,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 #include "nsPageContentFrame.h"
 
+#include "mozilla/AbsoluteContainingBlock.h"
 #include "mozilla/PresShell.h"
 #include "mozilla/PresShellInlines.h"
 #include "mozilla/StaticPrefs_layout.h"
@@ -137,7 +138,26 @@ void nsPageContentFrame::Reflow(nsPresContext* aPresContext,
 
   // Reflow our fixed frames
   nsReflowStatus fixedStatus;
-  ReflowAbsoluteFrames(aPresContext, aReflowOutput, aReflowInput, fixedStatus);
+  auto* absoluteContainer = GetAbsoluteContainingBlock();
+  if (absoluteContainer && absoluteContainer->PrepareAbsoluteFrames(this)) {
+    // The containing block for the fixed kids is formed by our padding edge.
+    const auto wm = GetWritingMode();
+    LogicalRect cbRect(wm, LogicalPoint(wm), aReflowOutput.Size(wm));
+    cbRect.Deflate(wm, GetLogicalUsedBorder(wm).ApplySkipSides(
+                           PreReflowBlockLevelLogicalSkipSides()));
+    // XXX: To optimize the performance, set the flags only when the CB width or
+    // height actually changes.
+    AbsPosReflowFlags flags{AbsPosReflowFlag::CBWidthChanged,
+                            AbsPosReflowFlag::CBHeightChanged};
+
+    // PageContentFrame replicates fixed pos children so we really don't want
+    // them contributing to overflow areas because that means we'll create new
+    // pages ad infinitum if one of them overflows the page.
+    absoluteContainer->Reflow(
+        this, aPresContext, aReflowInput, fixedStatus,
+        cbRect.GetPhysicalRect(wm, aReflowOutput.PhysicalSize()), flags,
+        /* aOverflowAreas */ nullptr);
+  }
   NS_ASSERTION(fixedStatus.IsComplete(),
                "fixed frames can be truncated, but not incomplete");
 

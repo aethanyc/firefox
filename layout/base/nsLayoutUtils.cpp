@@ -3924,7 +3924,8 @@ nsIFrame* nsLayoutUtils::GetParentOrPlaceholderForCrossDoc(
 }
 
 nsIFrame* nsLayoutUtils::GetDisplayListParent(nsIFrame* aFrame) {
-  if (aFrame->HasAnyStateBits(NS_FRAME_IS_PUSHED_FLOAT)) {
+  if (aFrame->HasAnyStateBits(NS_FRAME_IS_PUSHED_FLOAT |
+                              NS_FRAME_IS_PUSHED_ABSPOS)) {
     return aFrame->GetParent();
   }
   return nsLayoutUtils::GetParentOrPlaceholderForCrossDoc(aFrame);

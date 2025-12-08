@@ -4319,11 +4319,13 @@ void nsIFrame::BuildDisplayListForChild(nsDisplayListBuilder* aBuilder,
 
     // If 'child' is a pushed float then it's owned by a block that's not an
     // ancestor of the placeholder, and it will be painted by that block and
-    // should not be painted through the placeholder. Also recheck
-    // NS_FRAME_TOO_DEEP_IN_FRAME_TREE and NS_FRAME_IS_NONDISPLAY.
+    // should not be painted through the placeholder. Similarly for a pushed
+    // abspos frame.
+    //
+    // Also recheck NS_FRAME_TOO_DEEP_IN_FRAME_TREE and NS_FRAME_IS_NONDISPLAY.
     static const nsFrameState skipFlags =
-        (NS_FRAME_IS_PUSHED_FLOAT | NS_FRAME_TOO_DEEP_IN_FRAME_TREE |
-         NS_FRAME_IS_NONDISPLAY);
+        (NS_FRAME_IS_PUSHED_FLOAT | NS_FRAME_IS_PUSHED_ABSPOS |
+         NS_FRAME_TOO_DEEP_IN_FRAME_TREE | NS_FRAME_IS_NONDISPLAY);
     if (child->HasAnyStateBits(skipFlags) || nsLayoutUtils::IsPopup(child)) {
       return;
     }

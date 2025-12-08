@@ -144,6 +144,7 @@ bool AbsoluteContainingBlock::PrepareAbsoluteFrames(
         child->GetPrevInFlow()->GetParent() != aDelegatingFrame) {
       mPushedAbsoluteFrames.RemoveFrame(child);
       mAbsoluteFrames.AppendFrame(nullptr, child);
+      child->RemoveStateBits(NS_FRAME_IS_PUSHED_ABSPOS);
     }
     child = next;
   }
@@ -252,14 +253,6 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
                                      const nsRect& aContainingBlock,
                                      AbsPosReflowFlags aFlags,
                                      OverflowAreas* aOverflowAreas) {
-  // PageContentFrame replicates fixed pos children so we really don't want
-  // them contributing to overflow areas because that means we'll create new
-  // pages ad infinitum if one of them overflows the page.
-  if (aDelegatingFrame->IsPageContentFrame()) {
-    MOZ_ASSERT(mChildListID == FrameChildListID::Fixed);
-    aOverflowAreas = nullptr;
-  }
-
   const auto scrollableContainingBlock = [&]() -> nsRect {
     switch (aDelegatingFrame->Style()->GetPseudoType()) {
       case PseudoStyleType::scrolledContent:
@@ -278,12 +271,21 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
     return aContainingBlock;
   }();
 
+  if (nsIFrame* prevInFlow = aDelegatingFrame->GetPrevInFlow()) {
+    const auto* prevAbsCB = prevInFlow->GetAbsoluteContainingBlock();
+    mCumulativeAvailBSize = prevAbsCB->mCumulativeAvailBSize;
+  } else {
+    mCumulativeAvailBSize = 0;
+  }
+
   nsReflowStatus reflowStatus;
   const bool reflowAll = aReflowInput.ShouldReflowAllKids();
   const bool cbWidthChanged = aFlags.contains(AbsPosReflowFlag::CBWidthChanged);
   const bool cbHeightChanged =
       aFlags.contains(AbsPosReflowFlag::CBHeightChanged);
   nsOverflowContinuationTracker tracker(aDelegatingFrame, true);
+  nscoord availBSize = aReflowInput.AvailableBSize();
+  const WritingMode containerWM = aReflowInput.GetWritingMode();
   for (nsIFrame* kidFrame : mAbsoluteFrames) {
     Maybe<AnchorPosResolutionCache> anchorPosResolutionCache;
     if (kidFrame->HasAnchorPosReference()) {
@@ -303,9 +305,8 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
       MaybeMarkAncestorsAsHavingDescendantDependentOnItsStaticPos(
           kidFrame, aDelegatingFrame);
     }
-    const nscoord availBSize = aReflowInput.AvailableBSize();
-    const WritingMode containerWM = aReflowInput.GetWritingMode();
     if (!kidNeedsReflow && availBSize != NS_UNCONSTRAINEDSIZE) {
+      // TODO(TYLin): Reconsider the following condition is necessary or not.
       // If we need to redo pagination on the kid, we need to reflow it.
       // This can happen either if the available height shrunk and the
       // kid (or its overflow that creates overflow containers) is now
@@ -335,12 +336,69 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
       }
     }
     if (kidNeedsReflow && !aPresContext->HasPendingInterrupt()) {
-      // Reflow the frame
+      const bool kidMayNeedsSecondReflow =
+          aPresContext->FragmentainerAwarePositioningEnabled() &&
+          !kidFrame->GetPrevInFlow() && availBSize != NS_UNCONSTRAINEDSIZE &&
+          aFlags.contains(AbsPosReflowFlag::AllowFragmentation);
+
+      // If the kid may need a second reflow, perform the first reflow under an
+      // unconstrained available block-size, to resolve its offset, margin, and
+      // anchor positioning properties.
+      const AbsPosReflowFlags firstReflowFlags =
+          kidMayNeedsSecondReflow
+              ? aFlags - AbsPosReflowFlag::AllowFragmentation
+              : aFlags;
+
+      OverflowAreas kidOverflowAreas;
       nsReflowStatus kidStatus;
-      ReflowAbsoluteFrame(aDelegatingFrame, aPresContext, aReflowInput,
-                          aContainingBlock, scrollableContainingBlock, aFlags,
-                          kidFrame, kidStatus, aOverflowAreas,
-                          anchorPosResolutionCache.ptrOr(nullptr));
+      ReflowAbsoluteFrame(
+          aDelegatingFrame, aPresContext, aReflowInput, aContainingBlock,
+          scrollableContainingBlock, firstReflowFlags, kidFrame, kidStatus,
+          &kidOverflowAreas, anchorPosResolutionCache.ptrOr(nullptr));
+
+      if (kidMayNeedsSecondReflow) {
+        kidOverflowAreas.Clear();
+        kidStatus.Reset();
+
+        // Determine if kidFrame fits the current fragmentainer.
+        // TODO(TYLin): We need to apply cb size adjustment logic in
+        // ReflowAbsoluteFrame()
+        const LogicalSize cbSize(containerWM, aContainingBlock.Size());
+        const LogicalMargin border =
+            aDelegatingFrame->GetLogicalUsedBorder(containerWM)
+                .ApplySkipSides(
+                    aDelegatingFrame->PreReflowBlockLevelLogicalSkipSides());
+        const nsSize cbBorderBoxSize =
+            (cbSize + border.Size(containerWM)).GetPhysicalSize(containerWM);
+        const auto wm = kidFrame->GetWritingMode();
+        const nscoord kidBPos =
+            kidFrame->GetLogicalPosition(cbBorderBoxSize).B(wm) -
+            mCumulativeAvailBSize;
+        if (kidBPos >= availBSize) {
+          StealFrame(kidFrame);
+          mPushedAbsoluteFrames.AppendFrame(nullptr, kidFrame);
+          kidFrame->AddStateBits(NS_FRAME_IS_PUSHED_ABSPOS);
+        } else {
+          const LogicalRect kidOverflowRect(
+              containerWM,
+              // Use ...RelativeToSelf to ignore transforms
+              kidFrame->ScrollableOverflowRectRelativeToSelf() +
+                  kidFrame->GetPosition(),
+              aContainingBlock.Size());
+          const nscoord kidOverflowBEnd = kidOverflowRect.BEnd(containerWM);
+          if (kidOverflowBEnd > availBSize) {
+            // Reflow again under the actual available block-size.
+            ReflowAbsoluteFrame(aDelegatingFrame, aPresContext, aReflowInput,
+                                aContainingBlock, scrollableContainingBlock,
+                                aFlags, kidFrame, kidStatus, &kidOverflowAreas,
+                                anchorPosResolutionCache.ptrOr(nullptr));
+          }
+        }
+      }
+      if (aOverflowAreas) {
+        aOverflowAreas->UnionWith(kidOverflowAreas);
+      }
+
       MOZ_ASSERT(!kidStatus.IsInlineBreakBefore(),
                  "ShouldAvoidBreakInside should prevent this from happening");
       nsIFrame* nextFrame = kidFrame->GetNextInFlow();
@@ -350,6 +408,7 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
             nextFrame = aPresContext->PresShell()
                             ->FrameConstructor()
                             ->CreateContinuingFrame(kidFrame, aDelegatingFrame);
+            nextFrame->AddStateBits(NS_FRAME_IS_PUSHED_ABSPOS);
             mPushedAbsoluteFrames.AppendFrame(nullptr, nextFrame);
           } else if (nextFrame->GetParent() !=
                      aDelegatingFrame->GetNextInFlow()) {
@@ -420,9 +479,13 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
     }
   }
 
+  if (availBSize != NS_UNCONSTRAINEDSIZE) {
+    mCumulativeAvailBSize += availBSize;
+  }
+
   // Abspos frames can't cause their parent to be incomplete,
   // only overflow incomplete.
-  if (reflowStatus.IsIncomplete()) {
+  if (reflowStatus.IsIncomplete() || mPushedAbsoluteFrames.NotEmpty()) {
     reflowStatus.SetOverflowIncomplete();
     reflowStatus.SetNextInFlowNeedsReflow();
   }
@@ -1332,8 +1395,9 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
         // Don't split things below the fold. (Ideally we shouldn't *have*
         // anything totally below the fold, but we can't position frames
         // across next-in-flow breaks yet. (Bug 1994346)
-        (aKidFrame->GetLogicalRect(cb.mFinalRect.Size()).BStart(wm) <=
-         aReflowInput.AvailableBSize());
+        (aPresContext->FragmentainerAwarePositioningEnabled() ||
+         aKidFrame->GetLogicalRect(cb.mFinalRect.Size()).BStart(wm) <=
+             aReflowInput.AvailableBSize());
 
     // Get the border values
     const LogicalMargin border =
@@ -1372,9 +1436,10 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
       nscoord kidAvailBSize = kidReflowInput.AvailableBSize();
       if (kidAvailBSize != NS_UNCONSTRAINEDSIZE) {
         kidAvailBSize -= kidReflowInput.ComputedLogicalMargin(wm).BStart(wm);
-        const nscoord kidOffsetBStart =
+        nscoord kidOffsetBStart =
             kidReflowInput.ComputedLogicalOffsets(wm).BStart(wm);
         if (kidOffsetBStart != NS_AUTOOFFSET) {
+          kidOffsetBStart -= mCumulativeAvailBSize;
           kidAvailBSize -= kidOffsetBStart;
         }
         kidReflowInput.SetAvailableBSize(kidAvailBSize);
@@ -1506,6 +1571,10 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
       LogicalRect rect(
           outerWM, offsets.StartOffset(outerWM) + margin.StartOffset(outerWM),
           kidSize);
+      if (availBSize != NS_UNCONSTRAINEDSIZE) {
+        rect.BStart(outerWM) -= mCumulativeAvailBSize;
+      }
+
       nsRect r = rect.GetPhysicalRect(outerWM, cbSize.GetPhysicalSize(outerWM));
 
       // So far, we've positioned against the padding edge of the containing
