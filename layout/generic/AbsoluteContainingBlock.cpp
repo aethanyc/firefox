@@ -144,6 +144,7 @@ bool AbsoluteContainingBlock::PrepareAbsoluteFrames(
         child->GetPrevInFlow()->GetParent() != aDelegatingFrame) {
       mPushedAbsoluteFrames.RemoveFrame(child);
       mAbsoluteFrames.AppendFrame(nullptr, child);
+      child->RemoveStateBits(NS_FRAME_IS_PUSHED_OUT_OF_FLOW);
     }
     child = next;
   }
