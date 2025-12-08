@@ -144,6 +144,7 @@ bool AbsoluteContainingBlock::PrepareAbsoluteFrames(
         child->GetPrevInFlow()->GetParent() != aDelegatingFrame) {
       mPushedAbsoluteFrames.RemoveFrame(child);
       mAbsoluteFrames.AppendFrame(nullptr, child);
+      child->RemoveStateBits(NS_FRAME_IS_PUSHED_ABSPOS);
     }
     child = next;
   }
@@ -376,6 +377,7 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
           kidOverflowAreas.Clear();
           StealFrame(kidFrame);
           mPushedAbsoluteFrames.AppendFrame(nullptr, kidFrame);
+          kidFrame->AddStateBits(NS_FRAME_IS_PUSHED_ABSPOS);
         } else {
           const LogicalRect kidOverflowRect(
               containerWM,
@@ -408,6 +410,7 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
             nextFrame = aPresContext->PresShell()
                             ->FrameConstructor()
                             ->CreateContinuingFrame(kidFrame, aDelegatingFrame);
+            nextFrame->AddStateBits(NS_FRAME_IS_PUSHED_ABSPOS);
             mPushedAbsoluteFrames.AppendFrame(nullptr, nextFrame);
           } else if (nextFrame->GetParent() !=
                      aDelegatingFrame->GetNextInFlow()) {
