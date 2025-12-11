@@ -211,7 +211,21 @@ class AbsoluteContainingBlock {
   // them to its own AbsoluteContainingBlock.
   nsFrameList mPushedAbsoluteFrames;
 
+  // This stores the sum of the available block-size that is suitable for
+  // reflowing the abspos frame, used to compute the correct position of the
+  // abspos element across fragmentainers. Note that for the absolute containing
+  // block's first-in-flow, the available block-size begins at the padding-box
+  // block-start edge, i.e. it does *not* include the block-start border.
+  //
+  // At the beginning of Reflow(), it is initialized from the previous absolute
+  // containing block's mCumulativeAvailBSize. At the end of Reflow(), we add
+  // the available block-size of the current absolute containing block.
+  nscoord mCumulativeAvailBSize = 0;
+
 #ifdef DEBUG
+  void SanityCheckChildListsBeforeReflow(
+      const nsIFrame* aDelegatingFrame) const;
+
   // FrameChildListID::Fixed or FrameChildListID::Absolute
   FrameChildListID const mChildListID;
 #endif
