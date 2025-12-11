@@ -672,6 +672,8 @@ nsColumnSetFrame::ColumnBalanceData nsColumnSetFrame::ReflowColumns(
       kidReflowInput.mFlags.mIsColumnBalancing = aConfig.mIsBalancing;
       kidReflowInput.mFlags.mIsInLastColumnBalancingReflow =
           aConfig.mIsLastBalancingReflow;
+      kidReflowInput.mFlags.mIsInColumnMeasuringReflow =
+          aConfig.mIsInMeasuringReflow;
       kidReflowInput.mBreakType = ReflowInput::BreakType::Column;
 
       // We need to reflow any float placeholders, even if our column block-size
@@ -1238,6 +1240,17 @@ void nsColumnSetFrame::Reflow(nsPresContext* aPresContext,
   // container's block direction).
   ReflowConfig config = ChooseColumnStrategy(
       aReflowInput, aReflowInput.ComputedISize() == NS_UNCONSTRAINEDSIZE);
+
+  if (aPresContext->FragmentainerAwarePositioningEnabled()) {
+    // Reflow the content with an unconstrained available block-size, to compute
+    // the unfragmented position of the absolutely positioned descendants.
+    ReflowConfig measuringConfig = config;
+    measuringConfig.mColBSize = NS_UNCONSTRAINEDSIZE;
+    measuringConfig.mIsInMeasuringReflow = true;
+
+    ReflowColumns(aDesiredSize, aReflowInput, aStatus, measuringConfig, true);
+    MarkPrincipalChildrenDirty(this);
+  }
 
   // If balancing, then we allow the last column to grow to unbounded
   // block-size during the first reflow. This gives us a way to estimate
