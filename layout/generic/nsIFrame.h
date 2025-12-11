@@ -1415,6 +1415,15 @@ class nsIFrame : public nsQueryFrame {
   NS_DECLARE_FRAME_PROPERTY_WITHOUT_DTOR(IBSplitSibling, nsContainerFrame)
   NS_DECLARE_FRAME_PROPERTY_WITHOUT_DTOR(IBSplitPrevSibling, nsContainerFrame)
 
+  // In a fragmented context, store an absolutely positioned frame's logical
+  // position as if it is unfragmented. The position is relative to the
+  // absolutely containing block's border-box. This property will be set after
+  // the frame is reflowed under unconstrained available block-size. The
+  // position is stored as a LogicalPoint in the containing block's writing
+  // mode.
+  NS_DECLARE_FRAME_PROPERTY_DELETABLE(UnfragmentedPositionProperty,
+                                      mozilla::LogicalPoint)
+
   NS_DECLARE_FRAME_PROPERTY_SMALL_VALUE(NormalPositionProperty, nsPoint)
   NS_DECLARE_FRAME_PROPERTY_DELETABLE(ComputedOffsetProperty, nsMargin)
 
