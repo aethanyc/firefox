@@ -367,7 +367,6 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
             cbBorderBoxSize);
         if (kidPos.B(containerWM) - mCumulativeAvailBSize >= availBSize) {
           kidFrameNeedsPush = true;
-          printf("without first reflow, kidFrameNeedsPush\n");
         }
       }
 
@@ -379,9 +378,6 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
             !kidFrame->HasAnyStateBits(NS_FRAME_IS_PUSHED_ABSPOS) &&
             availBSize != NS_UNCONSTRAINEDSIZE &&
             aFlags.contains(AbsPosReflowFlag::AllowFragmentation);
-
-        printf("kidMayNeedSecondReflow %s, is pushed\n",
-               YesOrNo(kidMayNeedSecondReflow));
 
         // If the kid may need a second reflow, do a first reflow with
         // fragmentation disabled. This lets us resolve offsets, margins, and
@@ -413,12 +409,9 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
               mCumulativeAvailBSize;
           kidFrame->SetProperty(nsIFrame::UnfragmentedPositionProperty(),
                                 kidFrame->GetPosition());
-          printf("kid unfragmented pos %s\n",
-                 ToString(kidFrame->GetPosition()).c_str());
           if (kidBPos >= availBSize) {
             kidOverflowAreas.Clear();
             kidFrameNeedsPush = true;
-            printf("after first reflow, kidFrameNeedsPush\n");
           } else {
             const LogicalRect kidOverflowRect(
                 containerWM,
@@ -431,7 +424,6 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
               // Reflow again under the actual available block-size.
               kidOverflowAreas.Clear();
               kidStatus.Reset();
-              printf("reflow second time\n");
               ReflowAbsoluteFrame(aDelegatingFrame, aPresContext, aReflowInput,
                                   aContainingBlock, scrollableContainingBlock,
                                   aFlags, kidFrame, kidStatus,
@@ -1493,8 +1485,6 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
         kidPos.B(outerWM) -= mCumulativeAvailBSize;
         availBSize -= kidPos.B(outerWM);
         NS_ASSERTION(availBSize > 0, "Why is available block-size < 0?");
-        printf("before creating kidReflowInput, availBSize %d, kidPos.B %d\n",
-               availBSize, kidPos.B(outerWM));
       }
     } else {
       availBSize = NS_UNCONSTRAINEDSIZE;
@@ -1545,7 +1535,6 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
       const LogicalSize kidSize = kidDesiredSize.Size(outerWM);
       const LogicalRect kidRect(outerWM, kidPos, kidSize);
       aKidFrame->SetRect(outerWM, kidRect, cbBorderBoxSize);
-      printf("Setting pushed abspos rect %s\n", ToString(kidRect).c_str());
     } else {
       // Position the child relative to our padding edge.
       const LogicalSize kidSize = kidDesiredSize.Size(outerWM);
