@@ -590,9 +590,9 @@ static void ReleaseValue(T* aPropertyValue) {
     return nsQueryFrame::class##_id;                                           \
   }
 
-#define NS_IMPL_FRAMEARENA_HELPERS(class)                             \
-  void* class ::operator new(size_t sz, mozilla::PresShell* aShell) { \
-    return aShell->AllocateFrame(nsQueryFrame::class##_id, sz);       \
+#define NS_IMPL_FRAMEARENA_HELPERS(class)                              \
+  void* class ::operator new(size_t sz, mozilla::PresShell * aShell) { \
+    return aShell->AllocateFrame(nsQueryFrame::class##_id, sz);        \
   }
 
 #define NS_DECL_ABSTRACT_FRAME(class)                                         \
@@ -1417,6 +1417,12 @@ class nsIFrame : public nsQueryFrame {
 
   NS_DECLARE_FRAME_PROPERTY_SMALL_VALUE(NormalPositionProperty, nsPoint)
   NS_DECLARE_FRAME_PROPERTY_DELETABLE(ComputedOffsetProperty, nsMargin)
+
+  // In fragmented context, store an absolutely positioned frame's physical
+  // position as if it is in galley mode. It will be set after the frame is
+  // reflowed under unconstrained available block-size.
+  NS_DECLARE_FRAME_PROPERTY_SMALL_VALUE(UnfragmentedAbsolutelyPositionProperty,
+                                        nsPoint)
 
   NS_DECLARE_FRAME_PROPERTY_DELETABLE(OutlineInnerRectProperty, nsRect)
   NS_DECLARE_FRAME_PROPERTY_DELETABLE(PreEffectsBBoxProperty, nsRect)
