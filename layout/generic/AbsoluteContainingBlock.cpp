@@ -363,7 +363,8 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
             (cbSize + border.Size(containerWM)).GetPhysicalSize(containerWM);
         const LogicalPoint kidPos(
             containerWM,
-            kidFrame->GetProperty(nsIFrame::UnfragmentedPositionProperty()),
+            kidFrame->GetProperty(
+                nsIFrame::UnfragmentedAbsolutelyPositionProperty()),
             cbBorderBoxSize);
         if (kidPos.B(containerWM) - mCumulativeAvailBSize >= availBSize) {
           kidFrameNeedsPush = true;
@@ -407,8 +408,9 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
               kidFrame->GetLogicalPosition(containerWM, cbBorderBoxSize)
                   .B(containerWM) -
               mCumulativeAvailBSize;
-          kidFrame->SetProperty(nsIFrame::UnfragmentedPositionProperty(),
-                                kidFrame->GetPosition());
+          kidFrame->SetProperty(
+              nsIFrame::UnfragmentedAbsolutelyPositionProperty(),
+              kidFrame->GetPosition());
           if (kidBPos >= availBSize) {
             kidOverflowAreas.Clear();
             kidFrameNeedsPush = true;
@@ -1480,7 +1482,8 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
             (cbSize + border.Size(outerWM)).GetPhysicalSize(outerWM);
         LogicalPoint kidPos(
             outerWM,
-            aKidFrame->GetProperty(nsIFrame::UnfragmentedPositionProperty()),
+            aKidFrame->GetProperty(
+                nsIFrame::UnfragmentedAbsolutelyPositionProperty()),
             cbBorderBoxSize);
         kidPos.B(outerWM) -= mCumulativeAvailBSize;
         availBSize -= kidPos.B(outerWM);
@@ -1528,7 +1531,8 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
           (cbSize + border.Size(outerWM)).GetPhysicalSize(outerWM);
       LogicalPoint kidPos(
           outerWM,
-          aKidFrame->GetProperty(nsIFrame::UnfragmentedPositionProperty()),
+          aKidFrame->GetProperty(
+              nsIFrame::UnfragmentedAbsolutelyPositionProperty()),
           cbBorderBoxSize);
       kidPos.B(outerWM) =
           !kidPrevInFlow ? kidPos.B(outerWM) - mCumulativeAvailBSize : 0;
