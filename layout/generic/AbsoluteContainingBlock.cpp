@@ -205,6 +205,35 @@ void AbsoluteContainingBlock::StealFrame(nsIFrame* aFrame) {
   MOZ_ASSERT(frameRemoved, "Failed to find aFrame from our child lists!");
 }
 
+#ifdef DEBUG
+void AbsoluteContainingBlock::SanityCheckChildListsBeforeReflow(
+    const nsIFrame* aDelegatingFrame) const {
+  for (const nsFrameList* list : {&mAbsoluteFrames, &mPushedAbsoluteFrames}) {
+    for (const nsIFrame* child : *list) {
+      for (nsIFrame* prev = child->GetPrevInFlow(); prev;
+           prev = prev->GetPrevInFlow()) {
+        MOZ_ASSERT(!list->ContainsFrame(prev),
+                   "It is wrong that both child and its prev-in-flow are in "
+                   "our child list!");
+      }
+    }
+  }
+
+  for (const nsIFrame* next = aDelegatingFrame->GetNextInFlow(); next;
+       next = next->GetNextInFlow()) {
+    auto* nextAbsCB = next->GetAbsoluteContainingBlock();
+    MOZ_ASSERT(nextAbsCB,
+               "Delegating frame's next-in-flow should have "
+               "AbsoluteContainingBlock!");
+    for (nsIFrame* child : nextAbsCB->GetChildList()) {
+      MOZ_ASSERT(
+          child->GetPrevInFlow(),
+          "We should've pulled all abspos first-in-flows to our child list!");
+    }
+  }
+}
+#endif
+
 static void MaybeMarkAncestorsAsHavingDescendantDependentOnItsStaticPos(
     nsIFrame* aFrame, nsIFrame* aContainingBlockFrame) {
   MOZ_ASSERT(aFrame->HasAnyStateBits(NS_FRAME_OUT_OF_FLOW));
@@ -313,6 +342,10 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
     }
     return aContainingBlock;
   }();
+
+#ifdef DEBUG
+  SanityCheckChildListsBeforeReflow(aDelegatingFrame);
+#endif
 
   if (nsIFrame* prevInFlow = aDelegatingFrame->GetPrevInFlow()) {
     const auto* prevAbsCB = prevInFlow->GetAbsoluteContainingBlock();

@@ -223,6 +223,9 @@ class AbsoluteContainingBlock {
   nscoord mCumulativeAvailBSize = 0;
 
 #ifdef DEBUG
+  void SanityCheckChildListsBeforeReflow(
+      const nsIFrame* aDelegatingFrame) const;
+
   // FrameChildListID::Fixed or FrameChildListID::Absolute
   FrameChildListID const mChildListID;
 #endif
