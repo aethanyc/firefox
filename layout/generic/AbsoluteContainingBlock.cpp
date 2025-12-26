@@ -127,6 +127,9 @@ void AbsoluteContainingBlock::DrainPushedChildList(
         child->GetPrevInFlow()->GetParent() != aDelegatingFrame) {
       mPushedAbsoluteFrames.RemoveFrame(child);
       mAbsoluteFrames.AppendFrame(nullptr, child);
+      if (!child->GetPrevInFlow()) {
+        child->RemoveStateBits(NS_FRAME_IS_PUSHED_OUT_OF_FLOW);
+      }
     }
   }
 }
@@ -149,8 +152,20 @@ bool AbsoluteContainingBlock::PrepareAbsoluteFrames(
     // absolute child list.
     nsFrameList pushedFrames = prevAbsCB->StealPushedChildList();
     if (pushedFrames.NotEmpty()) {
+      auto iter = mAbsoluteFrames.begin();
       mAbsoluteFrames.InsertFrames(aDelegatingFrame, nullptr,
                                    std::move(pushedFrames));
+
+      // After stealing children from the previous absCB. Move our original
+      // child that now has a prev-in-flow in our child list to the pushed child
+      // list.
+      while (iter != mAbsoluteFrames.end()) {
+        nsIFrame* const child = *iter++;
+        if (child->GetPrevInFlow()->GetParent() == aDelegatingFrame) {
+          mAbsoluteFrames.RemoveFrame(child);
+          mPushedAbsoluteFrames.AppendFrame(nullptr, child);
+        }
+      }
     }
   }
 
@@ -173,6 +188,9 @@ bool AbsoluteContainingBlock::PrepareAbsoluteFrames(
       if (!child->GetPrevInFlow()) {
         nextAbsCB->StealFrame(child);
         mAbsoluteFrames.AppendFrame(aDelegatingFrame, child);
+        if (!child->GetPrevInFlow()) {
+          child->RemoveStateBits(NS_FRAME_IS_PUSHED_OUT_OF_FLOW);
+        }
       }
     }
   }
