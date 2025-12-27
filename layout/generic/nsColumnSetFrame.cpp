@@ -672,6 +672,8 @@ nsColumnSetFrame::ColumnBalanceData nsColumnSetFrame::ReflowColumns(
       kidReflowInput.mFlags.mIsColumnBalancing = aConfig.mIsBalancing;
       kidReflowInput.mFlags.mIsInLastColumnBalancingReflow =
           aConfig.mIsLastBalancingReflow;
+      kidReflowInput.mFlags.mIsInColumnMeasuringReflow =
+          aConfig.mIsInColumnMeasuringReflow;
       kidReflowInput.mBreakType = ReflowInput::BreakType::Column;
 
       // We need to reflow any float placeholders, even if our column block-size
@@ -1239,6 +1241,14 @@ void nsColumnSetFrame::Reflow(nsPresContext* aPresContext,
   ReflowConfig config = ChooseColumnStrategy(
       aReflowInput, aReflowInput.ComputedISize() == NS_UNCONSTRAINEDSIZE);
 
+  ReflowConfig measuring = config;
+  measuring.mUsedColCount = 1;
+  measuring.mColBSize = NS_UNCONSTRAINEDSIZE;
+  measuring.mIsInColumnMeasuringReflow = true;
+
+  COLUMN_SET_LOG("%s: Measuring the column height: this=%p", __func__, this);
+  ReflowColumns(aDesiredSize, aReflowInput, aStatus, measuring, true);
+
   // If balancing, then we allow the last column to grow to unbounded
   // block-size during the first reflow. This gives us a way to estimate
   // what the average column block-size should be, because we can measure
@@ -1247,6 +1257,9 @@ void nsColumnSetFrame::Reflow(nsPresContext* aPresContext,
   // content back here and then have to push it out again!
   nsIFrame* nextInFlow = GetNextInFlow();
   bool unboundedLastColumn = config.mIsBalancing && !nextInFlow;
+
+  COLUMN_SET_LOG("%s: reflow column using real config: this=%p", __func__,
+                 this);
   const ColumnBalanceData colData = ReflowColumns(
       aDesiredSize, aReflowInput, aStatus, config, unboundedLastColumn);
 
