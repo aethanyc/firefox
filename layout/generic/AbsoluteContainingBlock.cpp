@@ -439,7 +439,8 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
           (cbSize + border.Size(containerWM)).GetPhysicalSize(containerWM);
 
       bool kidFrameNeedsPush = false;
-      if (kidFrame->HasProperty(nsIFrame::UnfragmentedPositionProperty())) {
+      if (kidFrame->HasProperty(nsIFrame::UnfragmentedPositionProperty()) &&
+          availBSize != NS_UNCONSTRAINEDSIZE) {
         // Compute the position of the pushed first-in-flow, and see if it needs
         // to be pushed to the next fragmentainer.
         const LogicalPoint kidPos(
@@ -454,69 +455,14 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
       OverflowAreas kidOverflowAreas;
       nsReflowStatus kidStatus;
       if (!kidFrameNeedsPush) {
-        const bool kidMayNeedSecondReflow =
-            aPresContext->FragmentainerAwarePositioningEnabled() &&
-            !kidFrame->HasAnyStateBits(NS_FRAME_IS_PUSHED_OUT_OF_FLOW) &&
-            availBSize != NS_UNCONSTRAINEDSIZE &&
-            aFlags.contains(AbsPosReflowFlag::AllowFragmentation) &&
-            !kidFrame->HasProperty(nsIFrame::UnfragmentedPositionProperty());
-
-        // If the kid may need a second reflow, do a first reflow with
-        // fragmentation disabled. This lets us resolve offsets, margins, and
-        // anchor positioning without splitting or pushing the frame yet.
-        const AbsPosReflowFlags firstReflowFlags =
-            kidMayNeedSecondReflow
-                ? aFlags - AbsPosReflowFlag::AllowFragmentation
-                : aFlags;
-
-        ReflowAbsoluteFrame(
-            aDelegatingFrame, aPresContext, aReflowInput, aContainingBlock,
-            scrollableContainingBlock, firstReflowFlags, kidFrame, kidStatus,
-            &kidOverflowAreas, anchorPosResolutionCache.ptrOr(nullptr));
+        ReflowAbsoluteFrame(aDelegatingFrame, aPresContext, aReflowInput,
+                            aContainingBlock, scrollableContainingBlock, aFlags,
+                            kidFrame, kidStatus, &kidOverflowAreas,
+                            anchorPosResolutionCache.ptrOr(nullptr));
 
         if (aReflowInput.mFlags.mIsInColumnMeasuringReflow) {
           kidFrame->SetProperty(nsIFrame::UnfragmentedPositionProperty(),
                                 kidFrame->GetPosition());
-          const LogicalPoint kidPos =
-              kidFrame->GetLogicalPosition(containerWM, cbBorderBoxSize);
-
-          printf("in column measuring reflow: kid %s pos %s, cbSize %s\n",
-                 kidFrame->ListTag().get(), ToString(kidPos).c_str(),
-                 ToString(cbSize).c_str());
-
-        } else if (kidMayNeedSecondReflow) {
-          // Cache the unfragmented position after the first reflow.
-          kidFrame->SetProperty(nsIFrame::UnfragmentedPositionProperty(),
-                                kidFrame->GetPosition());
-
-          // Determine if kidFrame fits the current fragmentainer.
-          const LogicalPoint kidPos =
-              kidFrame->GetLogicalPosition(containerWM, cbBorderBoxSize);
-
-          printf("kid %s pos %s, cbSize %s\n", kidFrame->ListTag().get(),
-                 ToString(kidPos).c_str(), ToString(cbSize).c_str());
-          if (kidPos.B(containerWM) - mCumulativeAvailBSize >= availBSize) {
-            kidOverflowAreas.Clear();
-            kidFrameNeedsPush = true;
-          } else {
-            const LogicalRect kidOverflowRect(
-                containerWM,
-                // Use ...RelativeToSelf to ignore transforms
-                kidFrame->ScrollableOverflowRectRelativeToSelf() +
-                    kidFrame->GetPosition(),
-                aContainingBlock.Size());
-            const nscoord kidOverflowBEnd = kidOverflowRect.BEnd(containerWM);
-            if (kidOverflowBEnd > availBSize) {
-              // Reflow again under the actual available block-size.
-              kidOverflowAreas.Clear();
-              kidStatus.Reset();
-              ReflowAbsoluteFrame(aDelegatingFrame, aPresContext, aReflowInput,
-                                  aContainingBlock, scrollableContainingBlock,
-                                  aFlags, kidFrame, kidStatus,
-                                  &kidOverflowAreas,
-                                  anchorPosResolutionCache.ptrOr(nullptr));
-            }
-          }
         }
         if (aOverflowAreas) {
           aOverflowAreas->UnionWith(kidOverflowAreas);
