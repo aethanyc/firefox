@@ -1241,13 +1241,15 @@ void nsColumnSetFrame::Reflow(nsPresContext* aPresContext,
   ReflowConfig config = ChooseColumnStrategy(
       aReflowInput, aReflowInput.ComputedISize() == NS_UNCONSTRAINEDSIZE);
 
-  ReflowConfig measuring = config;
-  measuring.mUsedColCount = 1;
-  measuring.mColBSize = NS_UNCONSTRAINEDSIZE;
-  measuring.mIsInColumnMeasuringReflow = true;
+  // if (aPresContext->FragmentainerAwarePositioningEnabled()) {
+  ReflowConfig measuringConfig = config;
+  measuringConfig.mUsedColCount = 1;
+  measuringConfig.mColBSize = NS_UNCONSTRAINEDSIZE;
+  measuringConfig.mIsInColumnMeasuringReflow = true;
 
   COLUMN_SET_LOG("%s: Measuring the column height: this=%p", __func__, this);
-  ReflowColumns(aDesiredSize, aReflowInput, aStatus, measuring, true);
+  ReflowColumns(aDesiredSize, aReflowInput, aStatus, measuringConfig, true);
+  //}
 
   // If balancing, then we allow the last column to grow to unbounded
   // block-size during the first reflow. This gives us a way to estimate

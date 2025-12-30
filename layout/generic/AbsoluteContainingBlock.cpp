@@ -15,6 +15,7 @@
 #include "fmt/format.h"
 #include "mozilla/CSSAlignUtils.h"
 #include "mozilla/DebugOnly.h"
+#include "mozilla/Logging.h"
 #include "mozilla/PresShell.h"
 #include "mozilla/ReflowInput.h"
 #include "mozilla/ScrollContainerFrame.h"
@@ -427,6 +428,9 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
         }
       }
     }
+
+    printf("kid %s needs reflow? %s\n", kidFrame->ListTag().get(),
+           YesOrNo(kidNeedsReflow));
     if (kidNeedsReflow && !aPresContext->HasPendingInterrupt()) {
       // TODO(TYLin): We might need to apply cb size adjustment logic in
       // ReflowAbsoluteFrame().
