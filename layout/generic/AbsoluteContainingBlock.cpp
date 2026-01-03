@@ -456,17 +456,13 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
       if (!kidFrameNeedsPush) {
         ReflowAbsoluteFrame(aDelegatingFrame, aPresContext, aReflowInput,
                             aContainingBlock, scrollableContainingBlock, aFlags,
-                            kidFrame, kidStatus, &kidOverflowAreas,
+                            kidFrame, kidStatus, aOverflowAreas,
                             anchorPosResolutionCache.ptrOr(nullptr));
 
         if (aReflowInput.mFlags.mIsInColumnMeasuringReflow) {
           kidFrame->SetProperty(nsIFrame::UnfragmentedPositionProperty(),
                                 kidFrame->GetPosition());
         }
-        if (aOverflowAreas) {
-          aOverflowAreas->UnionWith(kidOverflowAreas);
-        }
-
         MOZ_ASSERT(!kidStatus.IsInlineBreakBefore(),
                    "ShouldAvoidBreakInside should prevent this from happening");
       }
