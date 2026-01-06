@@ -152,16 +152,17 @@ bool AbsoluteContainingBlock::PrepareAbsoluteFrames(
     // absolute child list.
     nsFrameList pushedFrames = prevAbsCB->StealPushedChildList();
     if (pushedFrames.NotEmpty()) {
-      auto iter = mAbsoluteFrames.begin();
       mAbsoluteFrames.InsertFrames(aDelegatingFrame, nullptr,
                                    std::move(pushedFrames));
 
-      // After stealing children from the previous absCB. Move our original
-      // child that now has a prev-in-flow in our child list to the pushed child
-      // list.
-      while (iter != mAbsoluteFrames.end()) {
+      // After stealing children from the previous absCB. Move any child that
+      // now has a prev-in-flow in our child list to the pushed child list.
+      for (auto iter = mAbsoluteFrames.begin();
+           iter != mAbsoluteFrames.end();) {
         nsIFrame* const child = *iter++;
-        if (child->GetPrevInFlow()->GetParent() == aDelegatingFrame) {
+        nsIFrame* const childPrevInFlow = child->GetPrevInFlow();
+        if (childPrevInFlow &&
+            childPrevInFlow->GetParent() == aDelegatingFrame) {
           mAbsoluteFrames.RemoveFrame(child);
           mPushedAbsoluteFrames.AppendFrame(nullptr, child);
         }
@@ -460,6 +461,9 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
           kidFrame->SetOrUpdateDeletableProperty(
               nsIFrame::UnfragmentedPositionProperty(),
               kidFrame->GetLogicalPosition(containerWM, cbBorderBoxSize));
+          MOZ_ASSERT(!kidFrame->GetPrevInFlow(),
+                     "UnfragmentedPositionProperty only needed to be set on "
+                     "first-in-flow!");
         }
         MOZ_ASSERT(!kidStatus.IsInlineBreakBefore(),
                    "ShouldAvoidBreakInside should prevent this from happening");
