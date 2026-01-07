@@ -1248,6 +1248,7 @@ void nsColumnSetFrame::Reflow(nsPresContext* aPresContext,
     measuringConfig.mColBSize = NS_UNCONSTRAINEDSIZE;
     measuringConfig.mIsInMeasuringReflow = true;
 
+    COLUMN_SET_LOG("%s: Doing measuring reflow: this=%p", __func__, this);
     ReflowColumns(aDesiredSize, aReflowInput, aStatus, measuringConfig, true);
     MarkPrincipalChildrenDirty(this);
   }
@@ -1260,6 +1261,8 @@ void nsColumnSetFrame::Reflow(nsPresContext* aPresContext,
   // content back here and then have to push it out again!
   nsIFrame* nextInFlow = GetNextInFlow();
   bool unboundedLastColumn = config.mIsBalancing && !nextInFlow;
+  COLUMN_SET_LOG("%s: Doing first reflow: this=%p, unboundedLastColumn %s",
+                 __func__, this, YesOrNo(unboundedLastColumn));
   const ColumnBalanceData colData = ReflowColumns(
       aDesiredSize, aReflowInput, aStatus, config, unboundedLastColumn);
 

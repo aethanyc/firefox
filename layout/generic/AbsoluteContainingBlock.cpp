@@ -461,9 +461,9 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
           kidFrame->SetOrUpdateDeletableProperty(
               nsIFrame::UnfragmentedPositionProperty(),
               kidFrame->GetLogicalPosition(containerWM, cbBorderBoxSize));
-          MOZ_ASSERT(!kidFrame->GetPrevInFlow(),
-                     "UnfragmentedPositionProperty only needed to be set on "
-                     "first-in-flow!");
+          NS_ASSERTION(!kidFrame->GetPrevInFlow(),
+                       "UnfragmentedPositionProperty only needed to be set on "
+                       "first-in-flow!");
         }
         MOZ_ASSERT(!kidStatus.IsInlineBreakBefore(),
                    "ShouldAvoidBreakInside should prevent this from happening");
