@@ -833,6 +833,8 @@ BlockReflowState::PlaceFloatResult BlockReflowState::FlowAndPlaceFloat(
       floatRI->mFlags.mIsTopOfPage = false;
     }
     mBlock->ReflowFloat(*this, *floatRI, aFloat, reflowStatus);
+    printf("float %s status %s\n", aFloat->ListTag().get(),
+           ToString(reflowStatus).c_str());
   }
   if (aFloat->GetPrevInFlow()) {
     floatMargin.BStart(wm) = 0;

@@ -2957,7 +2957,8 @@ bool nsBlockFrame::ReflowDirtyLines(BlockReflowState& aState) {
 
   bool selfDirty = HasAnyStateBits(NS_FRAME_IS_DIRTY) ||
                    (aState.mReflowInput.IsBResize() &&
-                    HasAnyStateBits(NS_FRAME_CONTAINS_RELATIVE_BSIZE));
+                    HasAnyStateBits(NS_FRAME_CONTAINS_RELATIVE_BSIZE)) ||
+                   true;
 
   // Reflow our last line if our availableBSize has increased
   // so that we (and our last child) pull up content as necessary
@@ -3114,8 +3115,7 @@ bool nsBlockFrame::ReflowDirtyLines(BlockReflowState& aState) {
           // Last column can be reflowed unconstrained during column balancing.
           // Hence the additional NS_FRAME_HAS_MULTI_COLUMN_ANCESTOR bit check
           // as a fail-safe fallback.
-          aState.mReflowInput.AvailableBSize() != NS_UNCONSTRAINEDSIZE ||
-          HasAnyStateBits(NS_FRAME_HAS_MULTI_COLUMN_ANCESTOR) ||
+          aState.mReflowInput.IsInFragmentedContext() ||
           // Table can also be reflowed unconstrained during printing.
           aState.mPresContext->IsPaginated();
       if (isPaginated) {
@@ -3239,6 +3239,8 @@ bool nsBlockFrame::ReflowDirtyLines(BlockReflowState& aState) {
     // may be placed incorrectly), but that's OK because we'll mark the
     // line dirty below under "if (aState.mReflowInput.mDiscoveredClearance..."
     if (line->IsDirty() && (line->HasFloats() || !willReflowAgain)) {
+      printf("%s: line is dirty and has floats or not reflow again\n",
+             ListTag().get());
       lastLineMovedUp = true;
 
       bool maybeReflowingForFirstTime =
@@ -3342,6 +3344,9 @@ bool nsBlockFrame::ReflowDirtyLines(BlockReflowState& aState) {
       aState.mPresContext->CheckForInterrupt(this);
     } else {
       aState.mOverflowTracker->Skip(line->mFirstChild, aState.mReflowStatus);
+      printf("in else branch, aState.mReflowStatus %s\n",
+             ToString(aState.mReflowStatus).c_str());
+
       // Nop except for blocks (we don't create overflow container
       // continuations for any inlines atm), so only checking mFirstChild
       // is enough
@@ -7367,6 +7372,9 @@ void nsBlockFrame::ReflowFloat(BlockReflowState& aState, ReflowInput& aFloatRI,
              "Caller should pass a fresh reflow status!");
   MOZ_ASSERT(aFloat->HasAnyStateBits(NS_FRAME_OUT_OF_FLOW),
              "aFloat must be an out-of-flow frame");
+
+  printf("%s: Call ReflowFloat for %s\n", ListTag().get(),
+         aFloat->ListTag().get());
 
   WritingMode wm = aState.mReflowInput.GetWritingMode();
 
