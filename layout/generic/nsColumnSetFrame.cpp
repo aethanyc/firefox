@@ -1229,10 +1229,11 @@ void nsColumnSetFrame::Reflow(nsPresContext* aPresContext,
 
   //------------ Handle Incremental Reflow -----------------
 
-  COLUMN_SET_LOG("%s: Begin Reflow: this=%p, is nested multicol=%d", __func__,
-                 this,
-                 aReflowInput.mParentReflowInput->mFrame->HasAnyStateBits(
-                     NS_FRAME_HAS_MULTI_COLUMN_ANCESTOR));
+  const bool isNestedMulticol =
+      aReflowInput.mParentReflowInput->mFrame->HasAnyStateBits(
+          NS_FRAME_HAS_MULTI_COLUMN_ANCESTOR);
+  COLUMN_SET_LOG("%s: Begin Reflow: this=%p, is nested multicol=%s", __func__,
+                 this, YesOrNo(isNestedMulticol));
 
   // If inline size is unconstrained, set aForceAuto to true to allow
   // the columns to expand in the inline direction. (This typically
@@ -1241,7 +1242,11 @@ void nsColumnSetFrame::Reflow(nsPresContext* aPresContext,
   ReflowConfig config = ChooseColumnStrategy(
       aReflowInput, aReflowInput.ComputedISize() == NS_UNCONSTRAINEDSIZE);
 
-  if (aPresContext->FragmentainerAwarePositioningEnabled()) {
+  // Perform a measuring reflow for the inner multicol only when the outer
+  // multicol is in measuring reflow.
+  if (aPresContext->FragmentainerAwarePositioningEnabled() &&
+      (!isNestedMulticol ||
+       aReflowInput.AvailableBSize() == NS_UNCONSTRAINEDSIZE)) {
     // Reflow the content with an unconstrained available block-size, to compute
     // the unfragmented position of the absolutely positioned descendants.
     ReflowConfig measuringConfig = config;
