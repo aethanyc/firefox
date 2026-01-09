@@ -1242,13 +1242,25 @@ void nsColumnSetFrame::Reflow(nsPresContext* aPresContext,
   ReflowConfig config = ChooseColumnStrategy(
       aReflowInput, aReflowInput.ComputedISize() == NS_UNCONSTRAINEDSIZE);
 
-  // Perform a measuring reflow for the inner multicol only when the outer
-  // multicol is in measuring reflow.
-  if (aPresContext->FragmentainerAwarePositioningEnabled() &&
-      (!isNestedMulticol ||
-       aReflowInput.AvailableBSize() == NS_UNCONSTRAINEDSIZE)) {
-    // Reflow the content with an unconstrained available block-size, to compute
-    // the unfragmented position of the absolutely positioned descendants.
+  const bool shouldDoMeasuringReflow = [&]() {
+    if (!aPresContext->FragmentainerAwarePositioningEnabled()) {
+      return false;
+    }
+    if (isNestedMulticol) {
+      // If outer multicol is doing measuring reflow, we do, too.
+      return aReflowInput.AvailableBSize() == NS_UNCONSTRAINEDSIZE;
+    }
+    // If we are top-level multicol, do measuring reflow only when we reflow the
+    // first time.
+    return mLastBalanceBSize == NS_UNCONSTRAINEDSIZE;
+  }();
+  if (shouldDoMeasuringReflow) {
+    // Reflow the content with an unconstrained available block-size, to
+    // compute the unfragmented position of the absolutely positioned
+    // descendants.
+    //
+    // TODO(TYLin): Can we do measuring reflow only if we found absolutely
+    // positioned descendants?
     ReflowConfig measuringConfig = config;
     measuringConfig.mColBSize = NS_UNCONSTRAINEDSIZE;
     measuringConfig.mIsInMeasuringReflow = true;
