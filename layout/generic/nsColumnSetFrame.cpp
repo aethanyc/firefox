@@ -1246,12 +1246,16 @@ void nsColumnSetFrame::Reflow(nsPresContext* aPresContext,
     if (!aPresContext->FragmentainerAwarePositioningEnabled()) {
       return false;
     }
-    if (isNestedMulticol) {
-      // If outer multicol is doing measuring reflow, we do, too.
-      return aReflowInput.mFlags.mIsInColumnMeasuringReflow;
+    if (isNestedMulticol || aReflowInput.mFlags.mIsInColumnMeasuringReflow) {
+      // Only the top-level multicol can initiate a measuring reflow.
+      return false;
     }
-    // If we are top-level multicol, do measuring reflow only when we reflow the
-    // first time.
+    if (GetPrevInFlow()) {
+      // A measuring reflow is needed if we are a first-in-flow.
+      return false;
+    }
+    // If we are the first-in-flow of a top-level multicol, do a measuring
+    // reflow only when we reflow the first time.
     return mLastBalanceBSize == NS_UNCONSTRAINEDSIZE;
   }();
   if (shouldDoMeasuringReflow) {
@@ -1265,6 +1269,9 @@ void nsColumnSetFrame::Reflow(nsPresContext* aPresContext,
     measuringConfig.mColBSize = NS_UNCONSTRAINEDSIZE;
     measuringConfig.mIsInMeasuringReflow = true;
 
+    COLUMN_SET_LOG(
+        "%s: Doing column measuring reflow with an unconstrained block-size",
+        __func__);
     ReflowColumns(aDesiredSize, aReflowInput, aStatus, measuringConfig, true);
     MarkPrincipalChildrenDirty(this);
   }

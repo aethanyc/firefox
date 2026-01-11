@@ -985,8 +985,7 @@ bool ReflowInput::IsInFragmentedContext() const {
   // We consider mFrame with a prev-in-flow being in a fragmented context
   // because nsColumnSetFrame can reflow its last column with an unconstrained
   // available block-size.
-  return AvailableBSize() != NS_UNCONSTRAINEDSIZE || mFrame->GetPrevInFlow() ||
-         mFlags.mIsInColumnMeasuringReflow;
+  return AvailableBSize() != NS_UNCONSTRAINEDSIZE || mFrame->GetPrevInFlow();
 }
 
 /* static */
