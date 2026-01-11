@@ -1201,6 +1201,20 @@ void nsColumnSetFrame::FindBestBalanceBSize(const ReflowInput& aReflowInput,
   }
 }
 
+static bool HasAbsolutelyPositionedDescendants(const nsIFrame* aFrame) {
+  if (aFrame->HasAbsolutelyPositionedChildren()) {
+    return true;
+  }
+
+  for (const nsIFrame* child : aFrame->PrincipalChildList()) {
+    if (HasAbsolutelyPositionedDescendants(child)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 void nsColumnSetFrame::Reflow(nsPresContext* aPresContext,
                               ReflowOutput& aDesiredSize,
                               const ReflowInput& aReflowInput,
@@ -1256,15 +1270,17 @@ void nsColumnSetFrame::Reflow(nsPresContext* aPresContext,
     }
     // If we are the first-in-flow of a top-level multicol, do a measuring
     // reflow only when we reflow the first time.
-    return mLastBalanceBSize == NS_UNCONSTRAINEDSIZE;
+    if (mLastBalanceBSize != NS_UNCONSTRAINEDSIZE) {
+      return false;
+    }
+    // Only do measuring reflow if there are absolutely positioned descendants,
+    // since the purpose is to compute their unfragmented positions.
+    return HasAbsolutelyPositionedDescendants(this);
   }();
   if (shouldDoMeasuringReflow) {
     // Reflow the content with an unconstrained available block-size, to
     // compute the unfragmented position of the absolutely positioned
     // descendants.
-    //
-    // TODO(TYLin): Can we do measuring reflow only if we found absolutely
-    // positioned descendants?
     ReflowConfig measuringConfig = config;
     measuringConfig.mColBSize = NS_UNCONSTRAINEDSIZE;
     measuringConfig.mIsInMeasuringReflow = true;
