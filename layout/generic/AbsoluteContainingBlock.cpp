@@ -1627,11 +1627,14 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
     if (!unfragmentedPosition && !kidPrevInFlow) {
       nscoord kidAvailBSize = kidReflowInput.AvailableBSize();
       if (kidAvailBSize != NS_UNCONSTRAINEDSIZE) {
+        MOZ_ASSERT(!aPresContext->FragmentainerAwarePositioningEnabled(),
+                   "We should not be here when "
+                   "layout.abspos.fragmentainer-aware-positioning.enabled is "
+                   "enabled!");
         kidAvailBSize -= kidReflowInput.ComputedLogicalMargin(wm).BStart(wm);
-        nscoord kidOffsetBStart =
+        const nscoord kidOffsetBStart =
             kidReflowInput.ComputedLogicalOffsets(wm).BStart(wm);
         if (kidOffsetBStart != NS_AUTOOFFSET) {
-          kidOffsetBStart -= mCumulativeAvailBSize;
           kidAvailBSize -= kidOffsetBStart;
         }
         kidReflowInput.SetAvailableBSize(kidAvailBSize);
