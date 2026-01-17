@@ -1604,8 +1604,12 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
             aDelegatingFrame->PreReflowBlockLevelLogicalSkipSides());
 
     const nsIFrame* kidPrevInFlow = aKidFrame->GetPrevInFlow();
+    // We are computing an unfragmented position in a measuring reflow. Don't
+    // use the obsolete value in the property.
     const LogicalPoint* const unfragmentedPosition =
-        aKidFrame->GetProperty(nsIFrame::UnfragmentedPositionProperty());
+        aReflowInput.mFlags.mIsInColumnMeasuringReflow
+            ? nullptr
+            : aKidFrame->GetProperty(nsIFrame::UnfragmentedPositionProperty());
     nscoord availBSize;
     if (kidFrameMaySplit) {
       if (unfragmentedPosition) {
