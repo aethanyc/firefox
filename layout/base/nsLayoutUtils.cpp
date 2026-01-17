@@ -3901,6 +3901,23 @@ nsIFrame* nsLayoutUtils::FindChildContainingDescendant(
   return result;
 }
 
+bool nsLayoutUtils::HasAbsolutelyPositionedDescendants(const nsIFrame* aFrame) {
+  // Note: We could potentially skip monolithic abspos children (e.g. orthogonal
+  // writing-mode, contain:size, etc) as an optimization. However, it's unclear
+  // if this would provide measurable performance benefits.
+  if (aFrame->HasAbsolutelyPositionedChildren()) {
+    return true;
+  }
+  for (const auto& childList : aFrame->ChildLists()) {
+    for (const nsIFrame* child : childList.mList) {
+      if (HasAbsolutelyPositionedDescendants(child)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 nsBlockFrame* nsLayoutUtils::FindNearestBlockAncestor(nsIFrame* aFrame) {
   nsIFrame* nextAncestor;
   for (nextAncestor = aFrame->GetParent(); nextAncestor;

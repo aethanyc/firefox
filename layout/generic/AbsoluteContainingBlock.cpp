@@ -325,6 +325,16 @@ static AnchorPosResolutionCache PopulateAnchorResolutionCache(
   return result;
 }
 
+static LogicalPoint* GetUnfragmentedPosition(const ReflowInput& aCBReflowInput,
+                                             const nsIFrame* aFrame) {
+  // If the absolute containing block is in a measuring reflow, then aFrame's
+  // unfragmented position is going to be updated. Don't return the obsolete
+  // value in the property.
+  return aCBReflowInput.mFlags.mIsInColumnMeasuringReflow
+             ? nullptr
+             : aFrame->GetProperty(nsIFrame::UnfragmentedPositionProperty());
+}
+
 void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
                                      nsPresContext* aPresContext,
                                      const ReflowInput& aReflowInput,
@@ -447,12 +457,13 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
 
       bool kidFrameNeedsPush = false;
       if (const auto* unfragPos =
-              kidFrame->GetProperty(nsIFrame::UnfragmentedPositionProperty());
+              GetUnfragmentedPosition(aReflowInput, kidFrame);
           unfragPos && availBSize != NS_UNCONSTRAINEDSIZE) {
-        // If kidFrame's position is beyond the end of this fragmentainer, push
-        // it to the next fragmentainer.
-        if (unfragPos->B(containerWM) - mCumulativeContainingBlockBSize >=
-            availBSize) {
+        // If kidFrame's position in this fragment is beyond the end of this
+        // fragmentainer, push it to the next fragmentainer.
+        const nscoord kidBPosInThisFragment =
+            unfragPos->B(containerWM) - mCumulativeContainingBlockBSize;
+        if (kidBPosInThisFragment >= availBSize) {
           kidFrameNeedsPush = true;
         }
       }
@@ -1605,7 +1616,7 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
 
     const nsIFrame* kidPrevInFlow = aKidFrame->GetPrevInFlow();
     const LogicalPoint* const unfragmentedPosition =
-        aKidFrame->GetProperty(nsIFrame::UnfragmentedPositionProperty());
+        GetUnfragmentedPosition(aReflowInput, aKidFrame);
     nscoord availBSize;
     if (kidFrameMaySplit) {
       if (unfragmentedPosition) {
