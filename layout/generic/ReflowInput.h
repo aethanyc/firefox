@@ -474,8 +474,8 @@ struct ReflowInput : public SizeComputationInput {
     // available block-size becomes unconstrained.
     //
     // Note: only the top-level multicol can initiate a measuring reflow, so
-    // nested multicols are not an issue. See nsColumnSetFrame::Reflow() for
-    // details.
+    // nested multicols will do a measuring reflow only when the top-level one
+    // is doing it. See nsColumnSetFrame::Reflow() for details.
     bool mIsInColumnMeasuringReflow : 1;
 
     // True if ColumnSetWrapperFrame has a constrained block-size, and is going
