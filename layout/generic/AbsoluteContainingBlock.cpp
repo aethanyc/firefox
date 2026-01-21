@@ -106,15 +106,18 @@ void AbsoluteContainingBlock::RemoveFrame(FrameDestroyContext& aContext,
   }
 }
 
-// In a fragmented context, store an absolutely positioned frame's logical
-// position as if it is unfragmented. The position is relative to the absolute
-// containing block's border-box. This property will be set after the frame is
-// reflowed under unconstrained available block-size. The position is stored
-// as a LogicalPoint in the containing block's writing mode.
+// In a fragmented context, for an absolutely positioned frame, this property
+// stores the logical position that the frame would have, if its abspos
+// containing block were not being fragmented. The value for this property is
+// determined by performing a special reflow on the abspos containing block (or
+// a larger subtree that includes it), with an unconstrained available
+// block-size.
+//
+// The position is relative to the absolute containing block's border-box, and
+// is stored in the containing block's writing mode.
 //
 // Note: caller should use GetUnfragmentedPosition() helper to get the property.
-NS_DECLARE_FRAME_PROPERTY_DELETABLE(UnfragmentedPositionProperty,
-                                    mozilla::LogicalPoint)
+NS_DECLARE_FRAME_PROPERTY_DELETABLE(UnfragmentedPositionProperty, LogicalPoint)
 
 static LogicalPoint* GetUnfragmentedPosition(const ReflowInput& aCBReflowInput,
                                              const nsIFrame* aFrame) {
