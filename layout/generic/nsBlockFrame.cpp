@@ -3563,7 +3563,10 @@ bool nsBlockFrame::ReflowDirtyLines(BlockReflowState& aState) {
           if (aState.mReflowInput.WillReflowAgainForClearance()) {
             line->MarkDirty();
             keepGoing = false;
-            aState.mReflowStatus.SetIncomplete();
+            // If we are going to be reflowed again by our ancestor due to
+            // clearance frame discovered, reset the reflow completion status
+            // because it does not matter.
+            aState.mReflowStatus.Reset();
             break;
           }
 

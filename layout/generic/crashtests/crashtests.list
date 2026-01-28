@@ -354,7 +354,7 @@ load 507566.html
 load 508154-1.xhtml
 load 508168-1.html
 load chrome://reftest/content/crashtests/layout/generic/crashtests/508816-1.xhtml
-load 509749-1.html
+pref(layout.abspos.fragmentainer-aware-positioning.enabled,true) load 509749-1.html
 load 511482.html
 load 512724-1.html
 load 512725-1.html
@@ -395,7 +395,7 @@ asserts(0-1) load 571975-1.html # bug 574889
 load 571995.xhtml
 load 574958.xhtml
 asserts(0-8) load 578977.html # bug 757305
-load 580504-1.xhtml
+pref(layout.abspos.fragmentainer-aware-positioning.enabled,true) load 580504-1.xhtml
 load 582793-1.html
 load 585598-1.xhtml
 load 586806-1.html
