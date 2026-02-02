@@ -6303,11 +6303,6 @@ void nsCSSFrameConstructor::ContentRangeInserted(nsIContent* aStartChild,
     return;
   }
 
-  bool isAppend;
-  nsIFrame* prevSibling =
-      GetInsertionPrevSibling(&insertion, aStartChild, &isAppend);
-
-  LayoutFrameType frameType = insertion.mParentFrame->Type();
   LAYOUT_PHASE_TEMP_EXIT();
   if (MaybeRecreateForFrameset(insertion.mParentFrame, aStartChild,
                                aEndChild)) {
@@ -6329,6 +6324,11 @@ void nsCSSFrameConstructor::ContentRangeInserted(nsIContent* aStartChild,
     return;
   }
   LAYOUT_PHASE_TEMP_REENTER();
+
+  bool isAppend;
+  nsIFrame* prevSibling =
+      GetInsertionPrevSibling(&insertion, aStartChild, &isAppend);
+  LayoutFrameType frameType = insertion.mParentFrame->Type();
 
   nsFrameConstructorState state(
       mPresShell, GetAbsoluteContainingBlock(insertion.mParentFrame, FIXED_POS),

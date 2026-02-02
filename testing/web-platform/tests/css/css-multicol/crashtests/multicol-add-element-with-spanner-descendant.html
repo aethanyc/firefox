@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<link rel="help" href="https://bugzilla.mozilla.org/show_bug.cgi?id=2010353">
+<style>
+dialog {
+  position: static;
+  column-span: all;
+}
+#a {
+  column-width: 1em;
+}
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const b = document.getElementById("b")
+  a.appendChild(b)
+  c.scrollLeft
+})
+window.requestIdleCallback(() => {
+  document.documentElement.innerHTML = document.documentElement.innerHTML
+})
+</script>
+<meter id="c">a</meter>
+<li id="a">
+<dl id="b">
+<dialog open="true">
