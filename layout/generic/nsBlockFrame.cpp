@@ -4300,8 +4300,9 @@ void nsBlockFrame::ReflowBlockFrame(BlockReflowState& aState,
     // is to some degree out of paranoia:  if we reliably eat up block-start
     // margins at the top of the page as we ought to, it wouldn't be
     // needed.
-    if ((!aState.mReflowInput.mFlags.mIsTopOfPage || clearedFloats) &&
-        (availSpace.BSize(wm) < 0 || clearedPushedOrSplitFloat)) {
+    if ((!aState.mReflowInput.mFlags.mIsTopOfPage || clearedFloats ||
+         !aState.IsAdjacentWithBStart()) &&
+        (availSpace.BSize(wm) <= 0 || clearedPushedOrSplitFloat)) {
       // We know already that this child block won't fit on this
       // page/column due to the block-start margin or the clearance.  So we
       // need to get out of here now.  (If we don't, most blocks will handle
