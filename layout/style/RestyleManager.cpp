@@ -1539,7 +1539,7 @@ static void TryToHandleContainingBlockChange(nsChangeHint& aHint,
         // it that we need to keep track of.
         // The optimization of removing it isn't particularly
         // important, although it does mean we skip some tests.
-        NS_WARNING("skipping removal of absolute containing block");
+        MOZ_ASSERT_UNREACHABLE("skipping removal of absolute containing block");
       } else {
         cont->MarkAsNotAbsoluteContainingBlock();
       }
