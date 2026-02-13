@@ -737,7 +737,7 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
         // fragmentainer, push it to the next fragmentainer.
         const nscoord kidBPosInThisFragment =
             unfragPos->B(containerWM) - mCumulativeContainingBlockBSize;
-        if (kidBPosInThisFragment >= availBSize) {
+        if (kidBPosInThisFragment > availBSize) {
           kidFrameNeedsPush = true;
         }
       }
@@ -1778,7 +1778,7 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
         const nscoord kidBPosInThisFragment =
             unfragmentedPosition->B(outerWM) - mCumulativeContainingBlockBSize;
         availBSize = aReflowInput.AvailableBSize() - kidBPosInThisFragment;
-        NS_ASSERTION(availBSize > 0, "Why is available block-size <= 0?");
+        NS_ASSERTION(availBSize >= 0, "Why is available block-size < 0?");
       } else if (!aDelegatingFrame->GetPrevInFlow()) {
         // aDelegatingFrame is a first-in-flow. We subtract our containing
         // block's border-block-start, to consider the available space as
