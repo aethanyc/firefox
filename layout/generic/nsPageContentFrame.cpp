@@ -420,11 +420,12 @@ void nsPageContentFrame::AppendDirectlyOwnedAnonBoxes(
 }
 
 void nsPageContentFrame::EnsurePageName() {
-  MOZ_ASSERT(HasAnyStateBits(NS_FRAME_FIRST_REFLOW),
-             "Should only have been called on first reflow");
   if (mPageName) {
     return;
   }
+  MOZ_ASSERT(HasAnyStateBits(NS_FRAME_FIRST_REFLOW),
+             "Should only have been called on first reflow");
+
   MOZ_ASSERT(!GetPrevInFlow(),
              "Only the first page should initially have a null page name.");
   // This was the first page, we need to find our own page name and then set
