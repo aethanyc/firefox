@@ -149,8 +149,12 @@ void PrintedSheetFrame::Reflow(nsPresContext* aPresContext,
     // pages are never reflowed to fit their sheet - if/when necessary they are
     // scaled to fit their sheet. Hence why we get the page's own dimensions to
     // use as its "available space"/"container size" here.
-    const nsSize physPageSize = pageFrame->ComputePageSize();
-    const LogicalSize pageSize(wm, physPageSize);
+    nsSize physPageSize = pageFrame->ComputePageSize();
+    LogicalSize pageSize(wm, physPageSize);
+
+    if (aReflowInput.mFlags.mIsInFragmentainerMeasuringReflow) {
+      pageSize.BSize(wm) = NS_UNCONSTRAINEDSIZE;
+    }
 
     ReflowInput pageReflowInput(aPresContext, aReflowInput, pageFrame,
                                 pageSize);

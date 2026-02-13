@@ -105,6 +105,11 @@ nsReflowStatus nsPageFrame::ReflowPageContent(
   ReflowInput kidReflowInput(
       aPresContext, aPageReflowInput, frame,
       LogicalSize(frame->GetWritingMode(), availableSpace));
+
+  if (aPageReflowInput.mFlags.mIsInFragmentainerMeasuringReflow) {
+    kidReflowInput.SetAvailableBSize(NS_UNCONSTRAINEDSIZE);
+  }
+
   kidReflowInput.mFlags.mIsTopOfPage = true;
   kidReflowInput.mFlags.mTableIsSplittable = true;
 
