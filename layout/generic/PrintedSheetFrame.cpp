@@ -8,6 +8,7 @@
 
 #include "mozilla/PrintedSheetFrame.h"
 
+#include "mozilla/Logging.h"
 #include "mozilla/PresShell.h"
 #include "mozilla/StaticPrefs_print.h"
 #include "nsCSSFrameConstructor.h"
@@ -100,6 +101,7 @@ void PrintedSheetFrame::Reflow(nsPresContext* aPresContext,
   // see bug 1835782.
   mSizeForChildren =
       nsSize(aReflowInput.AvailableISize(), aReflowInput.AvailableBSize());
+  fmt::println("mSizeForChildren {}", ToString(mSizeForChildren));
   if (mPD->PagesPerSheetInfo()->mNumPages == 1) {
     auto* firstChild = PrincipalChildList().FirstChild();
     MOZ_ASSERT(firstChild && firstChild->IsPageFrame(),
@@ -149,8 +151,18 @@ void PrintedSheetFrame::Reflow(nsPresContext* aPresContext,
     // pages are never reflowed to fit their sheet - if/when necessary they are
     // scaled to fit their sheet. Hence why we get the page's own dimensions to
     // use as its "available space"/"container size" here.
-    const nsSize physPageSize = pageFrame->ComputePageSize();
-    const LogicalSize pageSize(wm, physPageSize);
+    nsSize physPageSize = pageFrame->ComputePageSize();
+    LogicalSize pageSize(wm, physPageSize);
+
+    if (aReflowInput.mFlags.mIsInFragmentainerMeasuringReflow) {
+      pageSize.BSize(wm) = NS_UNCONSTRAINEDSIZE;
+    }
+
+    fmt::println(
+        "PrintedSheetFrame::Reflow(): pageSize {}, available size {}, is in "
+        "measuring reflow {}",
+        ToString(pageSize), ToString(aReflowInput.AvailableSize()),
+        YesOrNo(aReflowInput.mFlags.mIsInFragmentainerMeasuringReflow));
 
     ReflowInput pageReflowInput(aPresContext, aReflowInput, pageFrame,
                                 pageSize);

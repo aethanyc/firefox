@@ -784,6 +784,12 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
           kidFrame->SetOrUpdateDeletableProperty(UnfragmentedSizeProperty(),
                                                  kidSize);
 
+          fmt::println("kidFrame {}, Set position {}, kidSize {}",
+                       kidFrame->ListTag().get(),
+                       ToString(kidFrame->GetLogicalPosition(containerWM,
+                                                             cbBorderBoxSize)),
+                       ToString(kidSize));
+
           // kidFrame must be a first-in-flow here. In a measuring reflow
           // starting in the first column, we only see first-in-flows (either
           // unsplit or pulled back from later continuations of this absolute

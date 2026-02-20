@@ -8,7 +8,9 @@
 
 #include <algorithm>
 
+#include "fmt/base.h"
 #include "gfxContext.h"
+#include "mozilla/EventForwards.h"
 #include "mozilla/Logging.h"
 #include "mozilla/PresShell.h"
 #include "mozilla/PrintedSheetFrame.h"
@@ -322,6 +324,7 @@ void nsPageSequenceFrame::Reflow(nsPresContext* aPresContext,
     return nsLayoutUtils::HasAbsolutelyPositionedDescendants(this);
   }();
 
+  fmt::println("shouldDoMeasuringReflow {}", YesOrNo(shouldDoMeasuringReflow));
   if (shouldDoMeasuringReflow) {
     // Reflow with an unconstrained page height, to compute unfragmented
     // positions, sizes, etc. of absolutely positioned containing block and
@@ -331,10 +334,10 @@ void nsPageSequenceFrame::Reflow(nsPresContext* aPresContext,
       MarkPrincipalChildrenDirty(this);
     }
 
-    const nsSize pageSize = aPresContext->GetPageSize();
-    auto restorePageSize =
-        MakeScopeExit([&] { aPresContext->SetPageSize(pageSize); });
-    aPresContext->SetPageSize(nsSize(pageSize.width, NS_UNCONSTRAINEDSIZE));
+    // const nsSize pageSize = aPresContext->GetPageSize();
+    // auto restorePageSize =
+    //     MakeScopeExit([&] { aPresContext->SetPageSize(pageSize); });
+    // aPresContext->SetPageSize(nsSize(pageSize.width, NS_UNCONSTRAINEDSIZE));
 
     for (nsIFrame* kidFrame : mFrames) {
       auto* sheet = static_cast<PrintedSheetFrame*>(kidFrame);
@@ -345,9 +348,15 @@ void nsPageSequenceFrame::Reflow(nsPresContext* aPresContext,
       sheet->ClaimPageFrameFromPrevInFlow();
 
       const nsSize sheetSize = sheet->ComputeSheetSize(aPresContext);
-      ReflowInput kidReflowInput(
-          aPresContext, aReflowInput, kidFrame,
-          LogicalSize(kidFrame->GetWritingMode(), sheetSize));
+
+      const auto kidWM = kidFrame->GetWritingMode();
+      LogicalSize availSize(kidWM, sheetSize);
+      availSize.BSize(kidWM) = NS_UNCONSTRAINEDSIZE;
+
+      fmt::println("in measuring reflow: sheetSize {}, availSize {}",
+                   ToString(sheetSize), ToString(availSize));
+      ReflowInput kidReflowInput(aPresContext, aReflowInput, kidFrame,
+                                 availSize);
       kidReflowInput.mBreakType = ReflowInput::BreakType::Page;
       kidReflowInput.mFlags.mIsInFragmentainerMeasuringReflow = true;
 
@@ -362,6 +371,9 @@ void nsPageSequenceFrame::Reflow(nsPresContext* aPresContext,
       FinishReflowChild(kidFrame, aPresContext, kidReflowOutput,
                         &kidReflowInput, wm, LogicalPoint(wm), sheetSize,
                         ReflowChildFlags::Default);
+
+      fmt::println("At the end of page measuring reflow!\n");
+      DumpFrameTreeLimited();
     }
 
     // Mark sheets dirty for normal reflow below.
@@ -407,6 +419,8 @@ void nsPageSequenceFrame::Reflow(nsPresContext* aPresContext,
     sheet->ClaimPageFrameFromPrevInFlow();
 
     const nsSize sheetSize = sheet->ComputeSheetSize(aPresContext);
+
+    fmt::println("in normal reflow: sheetSize {}", ToString(sheetSize));
 
     // Reflow the sheet
     ReflowInput kidReflowInput(

@@ -68,7 +68,12 @@ void nsPageContentFrame::Reflow(nsPresContext* aPresContext,
     nsIFrame* const frame = mFrames.FirstChild();
     const WritingMode frameWM = frame->GetWritingMode();
     const LogicalSize logicalSize(frameWM, maxSize);
-    ReflowInput kidReflowInput(aPresContext, aReflowInput, frame, logicalSize);
+
+    LogicalSize availSize = logicalSize;
+    if (aReflowInput.mFlags.mIsInFragmentainerMeasuringReflow) {
+      availSize.BSize(frameWM) = NS_UNCONSTRAINEDSIZE;
+    }
+    ReflowInput kidReflowInput(aPresContext, aReflowInput, frame, availSize);
     kidReflowInput.SetComputedBSize(logicalSize.BSize(frameWM));
     ReflowOutput kidReflowOutput(kidReflowInput);
     ReflowChild(frame, aPresContext, kidReflowOutput, kidReflowInput, 0, 0,

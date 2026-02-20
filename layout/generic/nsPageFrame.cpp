@@ -105,8 +105,18 @@ nsReflowStatus nsPageFrame::ReflowPageContent(
   ReflowInput kidReflowInput(
       aPresContext, aPageReflowInput, frame,
       LogicalSize(frame->GetWritingMode(), availableSpace));
+
+  if (aPageReflowInput.mFlags.mIsInFragmentainerMeasuringReflow) {
+    kidReflowInput.SetAvailableBSize(NS_UNCONSTRAINEDSIZE);
+  }
+
   kidReflowInput.mFlags.mIsTopOfPage = true;
   kidReflowInput.mFlags.mTableIsSplittable = true;
+
+  fmt::println(
+      "nsPageFrame::ReflowPageContent: availableSpace {}, computed bsize {}",
+      ToString(kidReflowInput.AvailableSize()),
+      ToString(kidReflowInput.ComputedBSize()));
 
   nsMargin defaultMargins = aPresContext->GetDefaultPageMargin();
   // The default margins are in the coordinate space of the physical paper.

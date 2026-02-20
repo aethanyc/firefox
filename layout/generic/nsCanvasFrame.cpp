@@ -590,6 +590,8 @@ void nsCanvasFrame::Reflow(nsPresContext* aPresContext,
                                     ReflowChildFlags::Default, aStatus);
   }
 
+  fmt::println("nsCanvasFrame::Reflow(): aReflowInput.AvailableSize() {}",
+               ToString(aReflowInput.AvailableSize()));
   FinishReflowWithAbsoluteFrames(aPresContext, aDesiredSize, aReflowInput,
                                  aStatus);
 
