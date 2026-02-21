@@ -1836,8 +1836,8 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
       availBSize = NS_UNCONSTRAINEDSIZE;
     }
     StyleSizeOverrides sizeOverrides;
-    if (const auto* unfragmentedSize =
-            GetUnfragmentedSize(aReflowInput, aKidFrame)) {
+    const auto* unfragmentedSize = GetUnfragmentedSize(aReflowInput, aKidFrame);
+    if (unfragmentedSize) {
       // ReflowInput for fragmented absolute frames will not compute absolute
       // constraints - it'd be redundant anyway, so just use the unfragmented
       // size and skip it.
@@ -1847,16 +1847,29 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
         sizeOverrides.mStyleISize.emplace(
             StyleSize::FromAppUnits(unfragmentedSize->ISize(wm)));
       }
-      if (aKidFrame->StylePosition()->BSize(wm, resolutionParams)->IsAuto()) {
-        sizeOverrides.mStyleBSize.emplace(
-            StyleSize::FromAppUnits(unfragmentedSize->BSize(wm)));
-      }
     }
     const LogicalSize availSize(outerWM, cbSize.ISize(outerWM), availBSize);
     ReflowInput kidReflowInput(aPresContext, aReflowInput, aKidFrame,
                                availSize.ConvertTo(wm, outerWM),
                                Some(cbSize.ConvertTo(wm, outerWM)), initFlags,
                                sizeOverrides, {}, aAnchorPosResolutionCache);
+
+    if (unfragmentedSize) {
+      auto resolutionParams =
+          AnchorPosResolutionParams::From(aKidFrame, aAnchorPosResolutionCache);
+      const auto* stylePos = aKidFrame->StylePosition();
+      if (stylePos->BSize(wm, resolutionParams)->IsAuto()) {
+        // The kid has 'auto' block-size. Instead of setting unfragmented
+        // block-size to sizeOverrides above, use it as a min-block-size lower
+        // bound to keep allowing fragmentation-imposed block-size growth.
+        const nscoord contentBSize =
+            unfragmentedSize->BSize(wm) -
+            (stylePos->mBoxSizing == StyleBoxSizing::BorderBox
+                 ? kidReflowInput.ComputedLogicalBorderPadding(wm).BStartEnd(wm)
+                 : 0);
+        kidReflowInput.SetComputedMinBSize(contentBSize);
+      }
+    }
 
     if (unfragmentedPosition) {
       // Do nothing. If aKidFrame may split, we've adjusted availBSize before
