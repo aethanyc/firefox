@@ -38,6 +38,9 @@ void nsPageContentFrame::Reflow(nsPresContext* aPresContext,
   MOZ_ASSERT(aStatus.IsEmpty(), "Caller should pass a fresh reflow status!");
   MOZ_ASSERT(mPD, "Need a pointer to nsSharedPageData before reflow starts");
 
+  fmt::println("in nsPageContentFrame::Reflow, avail size {}",
+               ToString(aReflowInput.AvailableSize()));
+
   if (GetPrevInFlow() && HasAnyStateBits(NS_FRAME_FIRST_REFLOW)) {
     nsresult rv =
         aPresContext->PresShell()->FrameConstructor()->ReplicateFixedFrames(
@@ -170,7 +173,8 @@ void nsPageContentFrame::Reflow(nsPresContext* aPresContext,
                "fixed frames can be truncated, but not incomplete");
 
   if (StaticPrefs::layout_display_list_improve_fragmentation() &&
-      mFrames.NotEmpty()) {
+      mFrames.NotEmpty() &&
+      !aReflowInput.mFlags.mIsInFragmentainerMeasuringReflow) {
     auto* const previous =
         static_cast<nsPageContentFrame*>(GetPrevContinuation());
     const nscoord previousPageOverflow =
@@ -183,6 +187,11 @@ void nsPageContentFrame::Reflow(nsPresContext* aPresContext,
     const nscoord currentPageOverflow = overflowBSize - pageBSize;
     nscoord remainingOverflow =
         std::max(currentPageOverflow, previousPageOverflow - pageBSize);
+
+    fmt::println(
+        "containerSize {}, pageBSize {}, overflowBSize {}, currentPageOverflow "
+        "{}",
+        ToString(containerSize), pageBSize, overflowBSize, currentPageOverflow);
 
     if (aStatus.IsFullyComplete() && remainingOverflow > 0) {
       // If we have ScrollableOverflow off the end of our page, then we report

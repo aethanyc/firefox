@@ -191,6 +191,8 @@ void PrintedSheetFrame::Reflow(nsPresContext* aPresContext,
     // next-in-flow, we would need to handle it in the 'status' logic below.
     NS_ASSERTION(!pageFrame->GetNextInFlow(), "bad child flow list");
 
+    fmt::println("fater reflow page frame, status {}", ToString(status));
+
     // Did this page complete the document, or do we need to generate
     // another page frame?
     if (status.IsFullyComplete()) {

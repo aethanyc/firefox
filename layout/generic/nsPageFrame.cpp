@@ -113,11 +113,6 @@ nsReflowStatus nsPageFrame::ReflowPageContent(
   kidReflowInput.mFlags.mIsTopOfPage = true;
   kidReflowInput.mFlags.mTableIsSplittable = true;
 
-  fmt::println(
-      "nsPageFrame::ReflowPageContent: availableSpace {}, computed bsize {}",
-      ToString(kidReflowInput.AvailableSize()),
-      ToString(kidReflowInput.ComputedBSize()));
-
   nsMargin defaultMargins = aPresContext->GetDefaultPageMargin();
   // The default margins are in the coordinate space of the physical paper.
   // Scale them by the pageSizeScale to convert them to the content coordinate
@@ -209,6 +204,12 @@ nsReflowStatus nsPageFrame::ReflowPageContent(
   nsReflowStatus kidStatus;
   ReflowChild(frame, aPresContext, kidOutput, kidReflowInput, xc, yc,
               ReflowChildFlags::Default, kidStatus);
+
+  fmt::println(
+      "nsPageFrame::ReflowPageContent: availableSpace {}, computed bsize {}, "
+      "kidStatus {}",
+      ToString(kidReflowInput.AvailableSize()),
+      ToString(kidReflowInput.ComputedBSize()), ToString(kidStatus));
 
   // Place and size the child
   FinishReflowChild(frame, aPresContext, kidOutput, &kidReflowInput, xc, yc,

@@ -590,10 +590,13 @@ void nsCanvasFrame::Reflow(nsPresContext* aPresContext,
                                     ReflowChildFlags::Default, aStatus);
   }
 
-  fmt::println("nsCanvasFrame::Reflow(): aReflowInput.AvailableSize() {}",
-               ToString(aReflowInput.AvailableSize()));
+  fmt::println(
+      "nsCanvasFrame::Reflow(): aReflowInput.AvailableSize() {}, status {}",
+      ToString(aReflowInput.AvailableSize()), ToString(aStatus));
   FinishReflowWithAbsoluteFrames(aPresContext, aDesiredSize, aReflowInput,
                                  aStatus);
+
+  fmt::println("after reflow absolute frames, status {}", ToString(aStatus));
 
   NS_FRAME_TRACE_REFLOW_OUT("nsCanvasFrame::Reflow", aStatus);
 }
