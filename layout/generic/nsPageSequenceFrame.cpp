@@ -317,7 +317,8 @@ void nsPageSequenceFrame::Reflow(nsPresContext* aPresContext,
     }
     // Only do measuring reflow if there are absolutely positioned descendants
     // since the purpose is to compute their unfragmented positions, sizes, etc.
-    return nsLayoutUtils::HasAbsolutelyPositionedDescendants(this);
+    return nsLayoutUtils::HasAbsolutelyPositionedDescendants(
+        this, nsLayoutUtils::DescendingIntoColumns::No);
   }();
 
   if (shouldDoMeasuringReflow) {

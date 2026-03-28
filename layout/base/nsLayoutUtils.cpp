@@ -3919,7 +3919,13 @@ nsIFrame* nsLayoutUtils::FindChildContainingDescendant(
   return result;
 }
 
-bool nsLayoutUtils::HasAbsolutelyPositionedDescendants(const nsIFrame* aFrame) {
+bool nsLayoutUtils::HasAbsolutelyPositionedDescendants(
+    const nsIFrame* aFrame, DescendingIntoColumns aDescendingIntoColumns) {
+  if (aDescendingIntoColumns == DescendingIntoColumns::No &&
+      aFrame->IsColumnSetWrapperFrame()) {
+    return false;
+  }
+
   // Note: We could potentially skip descending into monolithic children that
   // form an abspos containing block (e.g. orthogonal writing-mode,
   // contain:size, etc) as an optimization, since we only care about abspos
@@ -3930,7 +3936,7 @@ bool nsLayoutUtils::HasAbsolutelyPositionedDescendants(const nsIFrame* aFrame) {
   }
   for (const auto& childList : aFrame->ChildLists()) {
     for (const nsIFrame* child : childList.mList) {
-      if (HasAbsolutelyPositionedDescendants(child)) {
+      if (HasAbsolutelyPositionedDescendants(child, aDescendingIntoColumns)) {
         return true;
       }
     }

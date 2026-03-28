@@ -1252,7 +1252,8 @@ void nsColumnSetFrame::Reflow(nsPresContext* aPresContext,
     }
     // Only do a measuring reflow if there are absolutely positioned descendants
     // since the purpose is to compute their unfragmented positions.
-    return nsLayoutUtils::HasAbsolutelyPositionedDescendants(this);
+    return nsLayoutUtils::HasAbsolutelyPositionedDescendants(
+        this, nsLayoutUtils::DescendingIntoColumns::Yes);
   }();
   if (shouldDoMeasuringReflow) {
     // Reflow the content with an unconstrained available block-size, to

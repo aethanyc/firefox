@@ -1419,7 +1419,9 @@ class nsLayoutUtils {
    * whether a measuring reflow is required for computing unfragmented
    * positions of absolutely positioned elements.
    */
-  static bool HasAbsolutelyPositionedDescendants(const nsIFrame* aFrame);
+  enum class DescendingIntoColumns : bool { No, Yes };
+  static bool HasAbsolutelyPositionedDescendants(
+      const nsIFrame* aFrame, DescendingIntoColumns aDescendingIntoColumns);
 
   /**
    * Find the nearest ancestor that's a block
