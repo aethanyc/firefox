@@ -1000,13 +1000,19 @@ void nsContainerFrame::DisplayOverflowContainers(
 void nsContainerFrame::DisplayAbsoluteFramesNotBuiltByPlaceholder(
     nsDisplayListBuilder* aBuilder, const nsDisplayListSet& aLists) {
   for (nsIFrame* frame : GetChildList(FrameChildListID::Absolute)) {
+    printf(
+        "call DisplayAbsoluteFramesNotBuiltByPlaceholder by %s, testing for "
+        "%s\n",
+        ListTag().get(), frame->ListTag().get());
     if (frame->HasAnyStateBits(NS_FRAME_IS_PUSHED_OUT_OF_FLOW)) {
       BuildDisplayListForChild(aBuilder, frame, aLists);
-    } else if (nsPlaceholderFrame* ph = frame->GetPlaceholderFrame();
-               ph && !nsLayoutUtils::IsProperAncestorFrame(this, ph)) {
+    } else if (const auto* placeholder = frame->GetPlaceholderFrame();
+               placeholder && !IsInlineFrame() &&
+               !nsLayoutUtils::IsProperAncestorFrame(this, placeholder)) {
       // The placeholder is in a different continuation's subtree (e.g. it
       // drifted to a later column fragment). Build the abspos directly here
       // so that it paints in the correct fragment.
+      printf("BuildDisplayList for %s\n", frame->ListTag().get());
       BuildDisplayListForChild(aBuilder, frame, aLists);
     }
   }

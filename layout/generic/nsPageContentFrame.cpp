@@ -400,6 +400,7 @@ void nsPageContentFrame::BuildDisplayList(nsDisplayListBuilder* aBuilder,
       auto* pageCF = this;
       while ((pageCF = static_cast<nsPageContentFrame*>(
                   pageCF->GetNextContinuation()))) {
+        printf("build display list for pageCF %s\n", pageCF->ListTag().get());
         nsRect childVisible = overflowRect + GetOffsetTo(pageCF);
 
         nsDisplayListBuilder::AutoBuildingDisplayList buildingForChild(

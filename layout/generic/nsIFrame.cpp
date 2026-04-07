@@ -18,6 +18,7 @@
 #include "gfx2DGlue.h"
 #include "gfxUtils.h"
 #include "mozilla/AbsoluteContainingBlock.h"
+#include "mozilla/Assertions.h"
 #include "mozilla/Attributes.h"
 #include "mozilla/CaretAssociationHint.h"
 #include "mozilla/ComputedStyle.h"
@@ -4377,9 +4378,13 @@ void nsIFrame::BuildDisplayListForChild(nsDisplayListBuilder* aBuilder,
 
     // If the abspos's containing block is not an ancestor of the placeholder,
     // the abspos was already built directly by
-    // DisplayAbsoluteFramesNotBuiltByPlaceholder on its containing block.
-    if (child->IsAbsolutelyPositioned() &&
-        !nsLayoutUtils::IsProperAncestorFrame(child->GetParent(), placeholder)) {
+    // DisplayAbsoluteFramesNotBuiltByPlaceholder() on its containing block.
+    if (child->IsAbsolutelyPositioned() && !parent->IsInlineFrame() &&
+        !nsLayoutUtils::IsProperAncestorFrame(parent, placeholder)) {
+      printf("child cb %s, parent %s\n",
+             child->GetContainingBlock()->ListTag().get(),
+             child->GetParent()->ListTag().get());
+      printf("Skip BuildDisplayList for %s\n", child->ListTag().get());
       return;
     }
 
