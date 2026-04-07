@@ -997,10 +997,16 @@ void nsContainerFrame::DisplayOverflowContainers(
   }
 }
 
-void nsContainerFrame::DisplayPushedAbsoluteFrames(
+void nsContainerFrame::DisplayAbsoluteFramesNotBuiltByPlaceholder(
     nsDisplayListBuilder* aBuilder, const nsDisplayListSet& aLists) {
   for (nsIFrame* frame : GetChildList(FrameChildListID::Absolute)) {
     if (frame->HasAnyStateBits(NS_FRAME_IS_PUSHED_OUT_OF_FLOW)) {
+      BuildDisplayListForChild(aBuilder, frame, aLists);
+    } else if (nsPlaceholderFrame* ph = frame->GetPlaceholderFrame();
+               ph && !nsLayoutUtils::IsProperAncestorFrame(this, ph)) {
+      // The placeholder is in a different continuation's subtree (e.g. it
+      // drifted to a later column fragment). Build the abspos directly here
+      // so that it paints in the correct fragment.
       BuildDisplayListForChild(aBuilder, frame, aLists);
     }
   }

@@ -4375,6 +4375,14 @@ void nsIFrame::BuildDisplayListForChild(nsDisplayListBuilder* aBuilder,
       return;
     }
 
+    // If the abspos's containing block is not an ancestor of the placeholder,
+    // the abspos was already built directly by
+    // DisplayAbsoluteFramesNotBuiltByPlaceholder on its containing block.
+    if (child->IsAbsolutelyPositioned() &&
+        !nsLayoutUtils::IsProperAncestorFrame(child->GetParent(), placeholder)) {
+      return;
+    }
+
     MOZ_ASSERT(child->HasAnyStateBits(NS_FRAME_OUT_OF_FLOW));
     savedOutOfFlowData = nsDisplayListBuilder::GetOutOfFlowData(child);
 

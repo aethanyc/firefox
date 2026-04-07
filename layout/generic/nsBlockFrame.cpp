@@ -7947,9 +7947,7 @@ void nsBlockFrame::BuildDisplayList(nsDisplayListBuilder* aBuilder,
       lineCount++;
     }
 
-    if (GetPrevInFlow()) {
-      DisplayPushedAbsoluteFrames(aBuilder, aLists);
-    }
+    DisplayAbsoluteFramesNotBuiltByPlaceholder(aBuilder, aLists);
 
     if (nonDecreasingYs && lineCount >= MIN_LINES_NEEDING_CURSOR) {
       SetupLineCursorForDisplay();
