@@ -10316,9 +10316,7 @@ void nsGridContainerFrame::BuildDisplayList(nsDisplayListBuilder* aBuilder,
     BuildDisplayListForChild(aBuilder, child, aLists, flags);
   }
 
-  if (GetPrevInFlow()) {
-    DisplayPushedAbsoluteFrames(aBuilder, aLists);
-  }
+  DisplayAbsoluteFramesNotBuiltByPlaceholder(aBuilder, aLists);
 }
 
 bool nsGridContainerFrame::DrainSelfOverflowList() {

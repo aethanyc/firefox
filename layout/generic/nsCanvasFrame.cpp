@@ -391,9 +391,7 @@ void nsCanvasFrame::BuildDisplayList(nsDisplayListBuilder* aBuilder,
     BuildDisplayListForChild(aBuilder, kid, aLists);
   }
 
-  if (GetPrevInFlow()) {
-    DisplayPushedAbsoluteFrames(aBuilder, aLists);
-  }
+  DisplayAbsoluteFramesNotBuiltByPlaceholder(aBuilder, aLists);
 
   if (!canvasBg.mCSSSpecified && backgroundColorItem &&
       (needBlendContainerForBackgroundBlendMode ||
