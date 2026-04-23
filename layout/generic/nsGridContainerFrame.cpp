@@ -5921,6 +5921,10 @@ static nscoord ContentContribution(const GridItemInfo& aGridItem,
   nscoord size = nsLayoutUtils::IntrinsicForAxis(
       axis, rc, child, aConstraint, Some(aPercentageBasis),
       nsLayoutUtils::BAIL_IF_REFLOW_NEEDED, aMinSizeClamp, aOverrides);
+  if (aConstraint == IntrinsicISizeType::MinISize &&
+      child->StyleDisplay()->IsScrollableOverflow()) {
+    size = 0;
+  }
   auto childWM = child->GetWritingMode();
   const bool isOrthogonal = childWM.IsOrthogonalTo(gridWM);
   auto childAxis = isOrthogonal ? GetOrthogonalAxis(aAxis) : aAxis;
