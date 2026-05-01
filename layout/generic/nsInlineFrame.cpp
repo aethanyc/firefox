@@ -374,7 +374,9 @@ void nsInlineFrame::Reflow(nsPresContext* aPresContext,
 
   ReflowFrames(aPresContext, aReflowInput, irs, aReflowOutput, aStatus);
 
-  ReflowAbsoluteFrames(aPresContext, aReflowOutput, aReflowInput, aStatus);
+  // Note: abspos kids of relpos inlines are reflowed by the enclosing
+  // nsBlockFrame after line layout completes (Bug 489100), so all
+  // continuations have stable rects when the CB rect is computed.
 
   // Note: the line layout code will properly compute our
   // overflow-rect state for us.
@@ -1067,7 +1069,8 @@ void nsFirstLineFrame::Reflow(nsPresContext* aPresContext,
   ReflowFrames(aPresContext, aReflowInput, irs, aReflowOutput, aStatus);
   aReflowInput.mLineLayout->SetInFirstLine(false);
 
-  ReflowAbsoluteFrames(aPresContext, aReflowOutput, aReflowInput, aStatus);
+  // Note: :first-line cannot be position: relative per spec, so it can never
+  // be an abspos containing block. No abspos-reflow needed here.
 
   // Note: the line layout code will properly compute our overflow state for us
 }

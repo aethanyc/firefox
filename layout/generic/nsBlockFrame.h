@@ -754,6 +754,18 @@ class nsBlockFrame : public nsContainerFrame {
                           mozilla::OverflowAreas& aOverflowAreas);
 
   /**
+   * Reflow abspos children of any relative-positioned inline descendants in
+   * our lines. Per css-position-3 §def-cb, the containing block for those
+   * abspos children spans all fragments of the inline (including IB-split
+   * siblings and line-wrap continuations). Must run after line layout
+   * completes so all continuation rects are stable. (Bug 489100.)
+   */
+  void ReflowAbsPosOfRelposInlineDescendants(nsPresContext* aPresContext,
+                                             const ReflowInput& aReflowInput,
+                                             ReflowOutput& aMetrics,
+                                             nsReflowStatus& aStatus);
+
+  /**
    * Find any trailing BR clear from the last line of this block (or from its
    * prev-in-flows).
    */

@@ -56,6 +56,7 @@
 #include "nsGkAtoms.h"
 #include "nsHTMLParts.h"
 #include "nsIFrameInlines.h"
+#include "nsInlineFrame.h"
 #include "nsLayoutUtils.h"
 #include "nsLineBox.h"
 #include "nsLineLayout.h"
@@ -1714,6 +1715,15 @@ void nsBlockFrame::Reflow(nsPresContext* aPresContext, ReflowOutput& aMetrics,
     }
   }
 
+  // Bug 489100: per css-position-3 §def-cb, the containing block for abspos
+  // kids of a relpos inline spans all fragments of the inline. We compute it
+  // here, after line layout completes and continuation rects are stable.
+  if (!aReflowInput.WillReflowAgainForClearance() &&
+      !aPresContext->HasPendingInterrupt()) {
+    ReflowAbsPosOfRelposInlineDescendants(aPresContext, aReflowInput, aMetrics,
+                                          reflowStatus);
+  }
+
   FinishAndStoreOverflow(&aMetrics, aReflowInput.mStyleDisplay);
 
   aStatus = reflowStatus;
@@ -1762,6 +1772,103 @@ void nsBlockFrame::Reflow(nsPresContext* aPresContext, ReflowOutput& aMetrics,
     printf("%s\n", buf);
   }
 #endif
+}
+
+// Recursively visit every nsInlineFrame in aFrame's principal child list,
+// invoking aCallback. Used by ReflowAbsPosOfRelposInlineDescendants to
+// discover relpos inlines that are abspos containers.
+template <typename Callback>
+static void VisitInlineDescendants(nsIFrame* aFrame, Callback&& aCallback) {
+  for (nsIFrame* kid : aFrame->PrincipalChildList()) {
+    if (kid->IsInlineFrame()) {
+      aCallback(static_cast<nsInlineFrame*>(kid));
+    }
+    VisitInlineDescendants(kid, aCallback);
+  }
+}
+
+// Compute the abspos containing-block rect for a relpos inline per
+// css-position-3 §def-cb (Reading B / Chrome+Edge+Safari interop):
+// inline-start/block-start come from the chain head (first fragment);
+// inline-end/block-end come from the last in-flow continuation in source
+// order across the IB-split chain. Returns the rect in aTarget's local
+// coordinate space (relative to aTarget's border-box origin).
+static nsRect ComputeRelposInlineContainingBlock(const nsIFrame* aTarget) {
+  // Walk back to the chain head. IBSplitPrevSibling is keyed off the
+  // first-continuation of each ib-sibling part.
+  const nsIFrame* chainHead = aTarget;
+  while (auto* prev = chainHead->GetProperty(nsIFrame::IBSplitPrevSibling())) {
+    chainHead = prev;
+  }
+
+  // Walk forward to find the last in-flow inline continuation. The
+  // IBSplitSibling chain alternates inline/block (see
+  // nsCSSFrameConstructor::CreateIBSiblings); only inline parts count.
+  const nsIFrame* lastInline = chainHead;
+  for (const nsIFrame* part = chainHead; part;
+       part = part->GetProperty(nsIFrame::IBSplitSibling())) {
+    if (!part->IsInlineFrame()) {
+      continue;
+    }
+    for (const nsIFrame* cur = part; cur; cur = cur->GetNextContinuation()) {
+      lastInline = cur;
+    }
+  }
+
+  const WritingMode wm = chainHead->GetWritingMode();
+  const nsSize chainHeadSize = chainHead->GetSize();
+
+  // Build the CB rect: start edges at chainHead's (0, 0), end edges at
+  // lastInline's content edges (translated into chainHead's coord space).
+  const nsRect lastInChainHead =
+      lastInline->GetRect() + lastInline->GetParent()->GetOffsetTo(chainHead);
+  const LogicalRect lastLogical(wm, lastInChainHead, chainHeadSize);
+  LogicalRect cbLogical(
+      wm, LogicalPoint(wm),
+      LogicalSize(wm, lastLogical.IEnd(wm), lastLogical.BEnd(wm)));
+
+  // Spec: CB is at content edge (not padding edge as for block CBs).
+  // Deflate by border + padding.
+  cbLogical.Deflate(wm, chainHead->GetLogicalUsedBorderAndPadding(wm));
+
+  const nsRect cbInChainHead = cbLogical.GetPhysicalRect(wm, chainHeadSize);
+  // Translate from chainHead's local coord space to aTarget's. The offset to
+  // add is (chainHead.origin - aTarget.origin), which is
+  // aTarget->GetOffsetTo(chainHead).
+  return cbInChainHead + aTarget->GetOffsetTo(chainHead);
+}
+
+void nsBlockFrame::ReflowAbsPosOfRelposInlineDescendants(
+    nsPresContext* aPresContext, const ReflowInput& aReflowInput,
+    ReflowOutput& aMetrics, nsReflowStatus& aStatus) {
+  for (nsIFrame* kid : PrincipalChildList()) {
+    VisitInlineDescendants(kid, [&](nsInlineFrame* aInline) {
+      if (aInline->GetPrevContinuation()) {
+        // Only first-continuations carry the AbsoluteContainingBlock.
+        return;
+      }
+      if (!aInline->IsAbsoluteContainer()) {
+        return;
+      }
+      auto* absCB = aInline->GetAbsoluteContainingBlock();
+      if (!absCB || !absCB->PrepareAbsoluteFrames(aInline)) {
+        return;
+      }
+      const nsRect cbRect = ComputeRelposInlineContainingBlock(aInline);
+      // Synthesize a child ReflowInput for the inline so the abspos kid's
+      // ReflowInput chain is rooted at the inline (its CB) — needed for
+      // correct static-position computation.
+      const WritingMode iWM = aInline->GetWritingMode();
+      const LogicalSize availSize = aInline->GetLogicalSize(iWM);
+      ReflowInput inlineReflowInput(aPresContext, aReflowInput, aInline,
+                                    availSize);
+      AbsPosReflowFlags flags{AbsPosReflowFlag::AllowFragmentation,
+                              AbsPosReflowFlag::CBWidthChanged,
+                              AbsPosReflowFlag::CBHeightChanged};
+      absCB->Reflow(aInline, aPresContext, inlineReflowInput, aStatus, cbRect,
+                    flags, &aMetrics.mOverflowAreas);
+    });
+  }
 }
 
 nsReflowStatus nsBlockFrame::TrialReflow(nsPresContext* aPresContext,
