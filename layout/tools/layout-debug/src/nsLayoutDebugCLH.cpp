@@ -105,6 +105,10 @@ nsLayoutDebugCLH::Handle(nsICommandLine* aCmdLine) {
   bool paged = false;
   bool anonymousSubtreeDumping = false;
   bool deterministicFrameDumping = false;
+  bool dumpContent = false;
+  bool dumpFrames = false;
+  bool dumpFramesCSSPixels = false;
+  bool dumpRetainedDisplayList = false;
 
   rv = HandleFlagWithOptionalArgument(aCmdLine, u"layoutdebug"_ns,
                                       u"about:blank"_ns, url, flagPresent);
@@ -132,6 +136,20 @@ nsLayoutDebugCLH::Handle(nsICommandLine* aCmdLine) {
 
   rv = aCmdLine->HandleFlag(u"deterministic-frame-dumping"_ns, false,
                             &deterministicFrameDumping);
+  NS_ENSURE_SUCCESS(rv, rv);
+
+  rv = aCmdLine->HandleFlag(u"dump-content"_ns, false, &dumpContent);
+  NS_ENSURE_SUCCESS(rv, rv);
+
+  rv = aCmdLine->HandleFlag(u"dump-frames"_ns, false, &dumpFrames);
+  NS_ENSURE_SUCCESS(rv, rv);
+
+  rv = aCmdLine->HandleFlag(u"dump-frames-css-pixels"_ns, false,
+                            &dumpFramesCSSPixels);
+  NS_ENSURE_SUCCESS(rv, rv);
+
+  rv = aCmdLine->HandleFlag(u"dump-retained-display-list"_ns, false,
+                            &dumpRetainedDisplayList);
   NS_ENSURE_SUCCESS(rv, rv);
 
   nsCOMPtr<nsIMutableArray> argsArray = nsArray::Create();
@@ -180,6 +198,26 @@ nsLayoutDebugCLH::Handle(nsICommandLine* aCmdLine) {
     NS_ENSURE_SUCCESS(rv, rv);
   }
 
+  if (dumpContent) {
+    rv = AppendArg(argsArray, u"dump-content"_ns);
+    NS_ENSURE_SUCCESS(rv, rv);
+  }
+
+  if (dumpFrames) {
+    rv = AppendArg(argsArray, u"dump-frames"_ns);
+    NS_ENSURE_SUCCESS(rv, rv);
+  }
+
+  if (dumpFramesCSSPixels) {
+    rv = AppendArg(argsArray, u"dump-frames-css-pixels"_ns);
+    NS_ENSURE_SUCCESS(rv, rv);
+  }
+
+  if (dumpRetainedDisplayList) {
+    rv = AppendArg(argsArray, u"dump-retained-display-list"_ns);
+    NS_ENSURE_SUCCESS(rv, rv);
+  }
+
   nsCOMPtr<nsIWindowWatcher> wwatch =
       do_GetService(NS_WINDOWWATCHER_CONTRACTID);
   NS_ENSURE_TRUE(wwatch, NS_ERROR_FAILURE);
@@ -208,6 +246,14 @@ nsLayoutDebugCLH::GetHelpInfo(nsACString& aResult) {
       "                              subtrees in content dumps.\n"
       "  --deterministic-frame-dumping Toggle option to only include\n"
       "                                deterministic information in frame\n"
-      "                                dumps, for ease of diffing.\n");
+      "                                dumps, for ease of diffing.\n"
+      "  --dump-content Dump the content tree to stdout after the page has\n"
+      "                 loaded.\n"
+      "  --dump-frames Dump the frame tree (in app units) to stdout after the\n"
+      "                page has loaded.\n"
+      "  --dump-frames-css-pixels Dump the frame tree (in CSS pixels) to\n"
+      "                           stdout after the page has loaded.\n"
+      "  --dump-retained-display-list Dump the retained display list to\n"
+      "                               stdout after the page has loaded.\n");
   return NS_OK;
 }
