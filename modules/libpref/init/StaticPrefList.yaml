@@ -11532,6 +11532,14 @@
   value: true
   mirror: always
 
+# Enable the fix to consider all the inline fragments when computing the inline
+# containing block's rectangle for absolutely positioned frames per spec
+# definition https://www.w3.org/TR/css-position-3/#absolute-cb (Bug 489100).
+- name: layout.abspos.fragment-aware-inline-cb.enabled
+  type: bool
+  value: true
+  mirror: always
+
 #---------------------------------------------------------------------------
 # Prefs starting with "logging."
 #---------------------------------------------------------------------------

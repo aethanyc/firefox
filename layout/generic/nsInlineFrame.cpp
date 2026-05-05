@@ -374,7 +374,13 @@ void nsInlineFrame::Reflow(nsPresContext* aPresContext,
 
   ReflowFrames(aPresContext, aReflowInput, irs, aReflowOutput, aStatus);
 
-  ReflowAbsoluteFrames(aPresContext, aReflowOutput, aReflowInput, aStatus);
+  if (!StaticPrefs::layout_abspos_fragment_aware_inline_cb_enabled()) {
+    // Pref-off (legacy CSS 2.1) path: reflow abspos kids using just this
+    // fragment's rect. With the pref on, this is handled by nsBlockFrame
+    // after line layout (Bug 489100), with a CB rect that spans all of
+    // the inline's fragments per CSS Position 3 §def-cb.
+    ReflowAbsoluteFrames(aPresContext, aReflowOutput, aReflowInput, aStatus);
+  }
 
   // Note: the line layout code will properly compute our
   // overflow-rect state for us.
