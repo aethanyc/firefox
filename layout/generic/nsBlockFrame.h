@@ -756,6 +756,47 @@ class nsBlockFrame : public nsContainerFrame {
                           mozilla::OverflowAreas& aOverflowAreas);
 
   /**
+   * Reflow absolutely positioned descendants of inline containing blocks in
+   * our lines. Must be called after we reflow all the lines.
+   */
+  void ReflowAbsoluteDescendantsInInlineCB(nsPresContext* aPresContext,
+                                           const ReflowInput& aReflowInput,
+                                           ReflowOutput& aReflowOutput,
+                                           nsReflowStatus& aStatus);
+
+  /**
+   * Helper for ReflowAbsoluteDescendantsInInlineCB(). Recursively visit every
+   * inline frame reachable from aFrame via its principal child list, and call
+   * ReflowAbsoluteFramesInInlineCB() on each.
+   *
+   * @param aAbsoluteOverflowInBlockSpace accumulates absolute overflow areas
+   *        in this block frame's coordinate space.
+   * @param aSawAbspos set to true if any absolute frame was reflowed.
+   */
+  void WalkInlineDescendantsToReflowAbsoluteFrames(
+      nsIFrame* aFrame, nsPresContext* aPresContext,
+      const ReflowInput& aReflowInput, ReflowOutput& aReflowOutput,
+      nsReflowStatus& aStatus,
+      mozilla::OverflowAreas& aAbsoluteOverflowInBlockSpace, bool& aSawAbspos);
+
+  /**
+   * Helper for WalkInlineDescendantsToReflowAbsoluteFrames(). Reflow the
+   * absolute frames if aInlineCB is an absolute containing block. Also,
+   * propagate overflow areas from these absolutely positioned descendants to
+   * the appropriate ancestors.
+   *
+   * @param aAbsoluteOverflowInBlockSpace accumulates overflow areas from
+   *        traversed abspos descendants, in terms of this block frame's
+   *        coordinate space.
+   * @param aSawAbspos set to true if any absolute frame was reflowed.
+   */
+  void ReflowAbsoluteFramesInInlineCB(
+      nsInlineFrame* aInlineCB, nsPresContext* aPresContext,
+      const ReflowInput& aReflowInput, ReflowOutput& aReflowOutput,
+      nsReflowStatus& aStatus,
+      mozilla::OverflowAreas& aAbsoluteOverflowInBlockSpace, bool& aSawAbspos);
+
+  /**
    * Find any trailing BR clear from the last line of this block (or from its
    * prev-in-flows).
    */
