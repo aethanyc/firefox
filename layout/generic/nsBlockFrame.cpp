@@ -1778,23 +1778,6 @@ void nsBlockFrame::Reflow(nsPresContext* aPresContext, ReflowOutput& aMetrics,
 #endif
 }
 
-// Visit nsInlineFrame descendants (including subclasses such as ruby and
-// MathML inline frames). Skip nested blocks so each enclosing block handles
-// its own descendants (no double-processing); recurse through non-block,
-// non-inline wrappers (e.g. nsFirstLineFrame, nsRubyBaseContainerFrame) so
-// inlines inside them are still discovered.
-template <typename Callback>
-static void VisitInlineDescendants(nsIFrame* aFrame, Callback&& aCallback) {
-  if (aFrame->IsBlockFrameOrSubclass()) {
-    return;
-  }
-  if (nsInlineFrame* inlineFrame = do_QueryFrame(aFrame)) {
-    aCallback(inlineFrame);
-  }
-  for (nsIFrame* kid : aFrame->PrincipalChildList()) {
-    VisitInlineDescendants(kid, aCallback);
-  }
-}
 
 // Compute the abspos containing-block rect for a relpos inline per
 // css-position-3 §def-cb (Reading B / Chrome+Edge+Safari interop):
@@ -1861,65 +1844,9 @@ void nsBlockFrame::ReflowAbsPosOfRelposInlineDescendants(
     nsIFrame* lineChild = line.mFirstChild;
     for (int32_t i = 0, n = line.GetChildCount(); i < n;
          ++i, lineChild = lineChild->GetNextSibling()) {
-      VisitInlineDescendants(lineChild, [&](nsInlineFrame* aInline) {
-        if (aInline->GetPrevContinuation()) {
-          // Only first-continuations carry the AbsoluteContainingBlock.
-          return;
-        }
-        if (!aInline->IsAbsoluteContainer()) {
-          return;
-        }
-        auto* absCB = aInline->GetAbsoluteContainingBlock();
-        if (!absCB || !absCB->PrepareAbsoluteFrames(aInline)) {
-          return;
-        }
-        const nsRect cbRect = ComputeRelposInlineContainingBlock(aInline);
-        // Synthesize a child ReflowInput for the inline so the abspos kid's
-        // ReflowInput chain is rooted at the inline (its CB) — needed for
-        // correct static-position computation. Init() is invoked from the
-        // ReflowInput constructor; it only mutates aInline's frame state by
-        // toggling NS_FRAME_IN_CONSTRAINED_BSIZE, which is idempotent with
-        // the value set during the inline's own reflow.
-        const WritingMode iWM = aInline->GetWritingMode();
-        const LogicalSize availSize = aInline->GetLogicalSize(iWM);
-        ReflowInput inlineReflowInput(aPresContext, aReflowInput, aInline,
-                                      availSize);
-        AbsPosReflowFlags flags{AbsPosReflowFlag::AllowFragmentation,
-                                AbsPosReflowFlag::CBWidthChanged,
-                                AbsPosReflowFlag::CBHeightChanged};
-        OverflowAreas absposOverflow;
-        absCB->Reflow(aInline, aPresContext, inlineReflowInput, aStatus, cbRect,
-                      flags, &absposOverflow);
-        // Propagate the abspos overflow up to every ancestor between aInline
-        // and this block. We re-run FinishAndStoreOverflow on each ancestor
-        // (rather than just SetOverflowAreas) so that effects-related cached
-        // state stays in sync — in particular PreEffectsBBoxProperty, which
-        // SVGIntegrationUtils::PreEffectsInkOverflowRect reads at display-
-        // list time for filter / mask / clip-path frames. We feed in the
-        // pre-effects ink overflow so ComputeEffectsRect can re-derive the
-        // post-effects rect; scrollable overflow is unaffected by effects.
-        // The abspos rect is in aInline's local coord space; translate
-        // per-ancestor as we walk up.
-        for (nsIFrame* ancestor = aInline; ancestor && ancestor != this;
-             ancestor = ancestor->GetParent()) {
-          const nsPoint offsetToAncestor = aInline->GetOffsetTo(ancestor);
-          OverflowAreas addition(
-              absposOverflow.InkOverflow() + offsetToAncestor,
-              absposOverflow.ScrollableOverflow() + offsetToAncestor);
-          OverflowAreas existing = ancestor->GetOverflowAreas();
-          existing.UnionWith(addition);
-          ancestor->FinishAndStoreOverflow(existing, ancestor->GetSize());
-        }
-        // Translate absposOverflow from aInline's local coord space to this
-        // block's local coord space (line overflow and aMetrics are both in
-        // block-local space).
-        const nsPoint inlineToBlock = aInline->GetOffsetTo(this);
-        absposOverflow.InkOverflow() += inlineToBlock;
-        absposOverflow.ScrollableOverflow() += inlineToBlock;
-        lineAbsposOverflowInBlockSpace.UnionWith(absposOverflow);
-        aMetrics.mOverflowAreas.UnionWith(absposOverflow);
-        sawAbspos = true;
-      });
+      WalkInlineDescendantsToReflowAbsPosKids(
+          lineChild, aPresContext, aReflowInput, aMetrics, aStatus,
+          lineAbsposOverflowInBlockSpace, sawAbspos);
     }
     if (sawAbspos) {
       // Update the line's stored overflow so ShouldDescendIntoLine in
@@ -1932,6 +1859,89 @@ void nsBlockFrame::ReflowAbsPosOfRelposInlineDescendants(
       line.SetOverflowAreas(lineOverflow);
     }
   }
+}
+
+void nsBlockFrame::WalkInlineDescendantsToReflowAbsPosKids(
+    nsIFrame* aFrame, nsPresContext* aPresContext,
+    const ReflowInput& aReflowInput, ReflowOutput& aMetrics,
+    nsReflowStatus& aStatus,
+    OverflowAreas& aLineAbsposOverflowInBlockSpace, bool& aSawAbspos) {
+  if (aFrame->IsBlockFrameOrSubclass()) {
+    return;
+  }
+  if (nsInlineFrame* inlineFrame = do_QueryFrame(aFrame)) {
+    ReflowAbsPosKidsOfRelposInline(inlineFrame, aPresContext, aReflowInput,
+                                   aMetrics, aStatus,
+                                   aLineAbsposOverflowInBlockSpace, aSawAbspos);
+  }
+  for (nsIFrame* kid : aFrame->PrincipalChildList()) {
+    WalkInlineDescendantsToReflowAbsPosKids(
+        kid, aPresContext, aReflowInput, aMetrics, aStatus,
+        aLineAbsposOverflowInBlockSpace, aSawAbspos);
+  }
+}
+
+void nsBlockFrame::ReflowAbsPosKidsOfRelposInline(
+    nsInlineFrame* aInline, nsPresContext* aPresContext,
+    const ReflowInput& aReflowInput, ReflowOutput& aMetrics,
+    nsReflowStatus& aStatus,
+    OverflowAreas& aLineAbsposOverflowInBlockSpace, bool& aSawAbspos) {
+  if (aInline->GetPrevContinuation()) {
+    // Only first-continuations carry the AbsoluteContainingBlock.
+    return;
+  }
+  if (!aInline->IsAbsoluteContainer()) {
+    return;
+  }
+  auto* absCB = aInline->GetAbsoluteContainingBlock();
+  if (!absCB || !absCB->PrepareAbsoluteFrames(aInline)) {
+    return;
+  }
+  const nsRect cbRect = ComputeRelposInlineContainingBlock(aInline);
+  // Synthesize a child ReflowInput for the inline so the abspos kid's
+  // ReflowInput chain is rooted at the inline (its CB) — needed for
+  // correct static-position computation. Init() is invoked from the
+  // ReflowInput constructor; it only mutates aInline's frame state by
+  // toggling NS_FRAME_IN_CONSTRAINED_BSIZE, which is idempotent with
+  // the value set during the inline's own reflow.
+  const WritingMode iWM = aInline->GetWritingMode();
+  const LogicalSize availSize = aInline->GetLogicalSize(iWM);
+  ReflowInput inlineReflowInput(aPresContext, aReflowInput, aInline, availSize);
+  AbsPosReflowFlags flags{AbsPosReflowFlag::AllowFragmentation,
+                          AbsPosReflowFlag::CBWidthChanged,
+                          AbsPosReflowFlag::CBHeightChanged};
+  OverflowAreas absposOverflow;
+  absCB->Reflow(aInline, aPresContext, inlineReflowInput, aStatus, cbRect,
+                flags, &absposOverflow);
+  // Propagate the abspos overflow up to every ancestor between aInline
+  // and this block. We re-run FinishAndStoreOverflow on each ancestor
+  // (rather than just SetOverflowAreas) so that effects-related cached
+  // state stays in sync — in particular PreEffectsBBoxProperty, which
+  // SVGIntegrationUtils::PreEffectsInkOverflowRect reads at display-
+  // list time for filter / mask / clip-path frames. We feed in the
+  // pre-effects ink overflow so ComputeEffectsRect can re-derive the
+  // post-effects rect; scrollable overflow is unaffected by effects.
+  // The abspos rect is in aInline's local coord space; translate
+  // per-ancestor as we walk up.
+  for (nsIFrame* ancestor = aInline; ancestor && ancestor != this;
+       ancestor = ancestor->GetParent()) {
+    const nsPoint offsetToAncestor = aInline->GetOffsetTo(ancestor);
+    OverflowAreas addition(
+        absposOverflow.InkOverflow() + offsetToAncestor,
+        absposOverflow.ScrollableOverflow() + offsetToAncestor);
+    OverflowAreas existing = ancestor->GetOverflowAreas();
+    existing.UnionWith(addition);
+    ancestor->FinishAndStoreOverflow(existing, ancestor->GetSize());
+  }
+  // Translate absposOverflow from aInline's local coord space to this
+  // block's local coord space (line overflow and aMetrics are both in
+  // block-local space).
+  const nsPoint inlineToBlock = aInline->GetOffsetTo(this);
+  absposOverflow.InkOverflow() += inlineToBlock;
+  absposOverflow.ScrollableOverflow() += inlineToBlock;
+  aLineAbsposOverflowInBlockSpace.UnionWith(absposOverflow);
+  aMetrics.mOverflowAreas.UnionWith(absposOverflow);
+  aSawAbspos = true;
 }
 
 nsReflowStatus nsBlockFrame::TrialReflow(nsPresContext* aPresContext,

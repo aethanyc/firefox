@@ -768,6 +768,38 @@ class nsBlockFrame : public nsContainerFrame {
                                              nsReflowStatus& aStatus);
 
   /**
+   * Recursive walker used by ReflowAbsPosOfRelposInlineDescendants: visits
+   * every nsInlineFrame (including subclasses such as ruby and MathML inline
+   * frames) reachable from aFrame's principal child list and calls
+   * ReflowAbsPosKidsOfRelposInline on each one. Skips nested blocks (each
+   * enclosing block handles its own descendants) and recurses through
+   * non-block, non-inline wrappers (e.g. nsFirstLineFrame,
+   * nsRubyBaseContainerFrame) so inlines inside them are still discovered.
+   */
+  void WalkInlineDescendantsToReflowAbsPosKids(
+      nsIFrame* aFrame, nsPresContext* aPresContext,
+      const ReflowInput& aReflowInput, ReflowOutput& aMetrics,
+      nsReflowStatus& aStatus,
+      mozilla::OverflowAreas& aLineAbsposOverflowInBlockSpace,
+      bool& aSawAbspos);
+
+  /**
+   * Helper for ReflowAbsPosOfRelposInlineDescendants: handle a single
+   * candidate nsInlineFrame. Reflows its abspos kids using the
+   * union-of-fragments CB rect and propagates the resulting overflow up to
+   * every ancestor between aInline and this block, plus into
+   * aLineAbsposOverflowInBlockSpace and aMetrics. Sets aSawAbspos to true if
+   * any abspos kid was processed (so the caller knows to update the line's
+   * stored overflow).
+   */
+  void ReflowAbsPosKidsOfRelposInline(
+      nsInlineFrame* aInline, nsPresContext* aPresContext,
+      const ReflowInput& aReflowInput, ReflowOutput& aMetrics,
+      nsReflowStatus& aStatus,
+      mozilla::OverflowAreas& aLineAbsposOverflowInBlockSpace,
+      bool& aSawAbspos);
+
+  /**
    * Find any trailing BR clear from the last line of this block (or from its
    * prev-in-flows).
    */
