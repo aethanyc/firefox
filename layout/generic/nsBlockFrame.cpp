@@ -1862,10 +1862,6 @@ void nsBlockFrame::ReflowAbsPosOfRelposInlineDescendants(
     for (int32_t i = 0, n = line.GetChildCount(); i < n;
          ++i, lineChild = lineChild->GetNextSibling()) {
       VisitInlineDescendants(lineChild, [&](nsInlineFrame* aInline) {
-        if (aInline->GetPrevContinuation()) {
-          // Only first-continuations carry the AbsoluteContainingBlock.
-          return;
-        }
         if (!aInline->IsAbsoluteContainer()) {
           return;
         }
@@ -1881,7 +1877,8 @@ void nsBlockFrame::ReflowAbsPosOfRelposInlineDescendants(
         // toggling NS_FRAME_IN_CONSTRAINED_BSIZE, which is idempotent with
         // the value set during the inline's own reflow.
         const WritingMode iWM = aInline->GetWritingMode();
-        const LogicalSize availSize = aInline->GetLogicalSize(iWM);
+        const LogicalSize availSize(iWM, aInline->ISize(iWM),
+                                    NS_UNCONSTRAINEDSIZE);
         ReflowInput inlineReflowInput(aPresContext, aReflowInput, aInline,
                                       availSize);
         AbsPosReflowFlags flags{AbsPosReflowFlag::AllowFragmentation,

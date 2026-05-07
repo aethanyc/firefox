@@ -1814,10 +1814,6 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
         // Don't split if told not to (e.g. for fixed frames)
         aFlags.contains(AbsPosReflowFlag::AllowFragmentation) &&
 
-        // XXX we don't handle splitting frames for inline absolute containing
-        // blocks yet
-        !aDelegatingFrame->IsInlineFrame() &&
-
         // Bug 1588623: Support splitting absolute positioned multicol
         // containers.
         !aKidFrame->IsColumnSetWrapperFrame() &&
