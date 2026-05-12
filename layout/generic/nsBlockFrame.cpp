@@ -1294,23 +1294,35 @@ static nsRect ComputeInlineAbsoluteCBRect(const nsIFrame* aInlineFrame) {
         .ConvertTo(inlineWM, frameWM, inlineFrameSize);
   };
 
-  const LogicalRect firstContRect = BorderBoxRectRelativeToInlineFrame(
-      nsLayoutUtils::FirstContinuationOrIBSplitSibling(aInlineFrame));
-  const LogicalRect lastContRect = BorderBoxRectRelativeToInlineFrame(
-      nsLayoutUtils::LastContinuationOrIBSplitSibling(aInlineFrame));
+  const auto* firstCont =
+      nsLayoutUtils::FirstContinuationOrIBSplitSibling(aInlineFrame);
+  const auto* lastCont =
+      nsLayoutUtils::LastContinuationOrIBSplitSibling(aInlineFrame);
+  const LogicalRect firstContRect = BorderBoxRectRelativeToInlineFrame(firstCont);
+  const LogicalRect lastContRect = BorderBoxRectRelativeToInlineFrame(lastCont);
 
-  LogicalRect cbRect(inlineWM, firstContRect.IStart(inlineWM),
-                     firstContRect.BStart(inlineWM),
-                     lastContRect.IEnd(inlineWM), lastContRect.BEnd(inlineWM));
+  // Start edges from the first continuation, end edges from the last
+  // continuation.
+  const nscoord iStart = firstContRect.IStart(inlineWM);
+  const nscoord bStart = firstContRect.BStart(inlineWM);
+  const nscoord iEnd = lastContRect.IEnd(inlineWM);
+  const nscoord bEnd = lastContRect.BEnd(inlineWM);
+  LogicalRect cbRect(inlineWM, iStart, bStart, iEnd - iStart, bEnd - bStart);
 
-  // The CSS Position 3 spec says forming the cb rect from fragments' content
-  // edge [1], but other browsers and the unfragmented scenario defined in CSS
-  // 2.2 section 10.1.4 [2] use the padding edge. Therefore, we deflate only the
-  // border for interop.
+  // The CSS Position 3 spec says forming the cb rect from continuations'
+  // content edge [1], but other browsers and the unfragmented scenario defined
+  // in CSS 2.2 section 10.1.4 [2] use the padding edge. Therefore, we deflate
+  // only the border for interop.
   //
   // [1] https://drafts.csswg.org/css-position-3/#absolute-cb
   // [2] https://www.w3.org/TR/CSS22/visudet.html#containing-block-details
-  cbRect.Deflate(inlineWM, aInlineFrame->GetLogicalUsedBorder(inlineWM));
+  const LogicalMargin firstBorder = firstCont->GetLogicalUsedBorder(inlineWM);
+  const LogicalMargin lastBorder = lastCont->GetLogicalUsedBorder(inlineWM);
+  const LogicalMargin cbBorder(inlineWM, firstBorder.BStart(inlineWM),
+                               lastBorder.IEnd(inlineWM),
+                               lastBorder.BEnd(inlineWM),
+                               firstBorder.IStart(inlineWM));
+  cbRect.Deflate(inlineWM, cbBorder);
 
   return cbRect.GetPhysicalRect(inlineWM, inlineFrameSize);
 }
