@@ -3649,6 +3649,12 @@ class nsIFrame : public nsQueryFrame {
   bool IsBlockFrameOrSubclass() const;
 
   /**
+   * Returns true if the frame is an instance of nsInlineFrame or one of its
+   * subclasses.
+   */
+  bool IsInlineFrameOrSubclass() const;
+
+  /**
    * Returns true if the frame is an instance of nsImageFrame or one of its
    * subclasses.
    */

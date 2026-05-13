@@ -1281,6 +1281,8 @@ void nsBlockFrame::ClearLineClampEllipsis() { ::ClearLineClampEllipsis(this); }
 // space (relative to its border-box origin) per
 // https://drafts.csswg.org/css-position-3/#absolute-cb
 static nsRect ComputeInlineAbsoluteCBRect(const nsIFrame* aInlineFrame) {
+  MOZ_ASSERT(aInlineFrame->IsInlineFrameOrSubclass());
+
   const WritingMode inlineWM = aInlineFrame->GetWritingMode();
   const auto inlineFrameSize = aInlineFrame->GetSize();
 
@@ -1332,8 +1334,8 @@ void nsBlockFrame::ReflowAbsoluteDescendantsInInlineCB(
     ReflowOutput& aReflowOutput, nsReflowStatus& aStatus) {
   for (auto& line : Lines()) {
     if (line.IsBlock()) {
-      // The block on this line will run its own
-      // ReflowAbsoluteDescendantsInInlineCB() for its own descendant inlines.
+      // The block frame on this line will reflow those absolute frames in its
+      // inline absolute containing blocks.
       continue;
     }
     OverflowAreas lineAbsposOverflowInBlockSpace;
@@ -1362,12 +1364,13 @@ void nsBlockFrame::WalkInlineDescendantsToReflowAbsoluteFrames(
     nsReflowStatus& aStatus, OverflowAreas& aLineAbsposOverflowInBlockSpace,
     bool& aSawAbspos) {
   if (aFrame->IsBlockFrameOrSubclass()) {
+    // Block frames will walk their inline descendant.
     return;
   }
-  if (nsInlineFrame* inlineFrame = do_QueryFrame(aFrame)) {
-    ReflowAbsoluteFramesInInlineCB(inlineFrame, aPresContext, aReflowInput,
-                                   aReflowOutput, aStatus,
-                                   aLineAbsposOverflowInBlockSpace, aSawAbspos);
+  if (aFrame->IsInlineFrameOrSubclass() && aFrame->IsAbsoluteContainer()) {
+    ReflowAbsoluteFramesInInlineCB(
+        static_cast<nsInlineFrame*>(aFrame), aPresContext, aReflowInput,
+        aReflowOutput, aStatus, aLineAbsposOverflowInBlockSpace, aSawAbspos);
   }
   for (nsIFrame* kid : aFrame->PrincipalChildList()) {
     WalkInlineDescendantsToReflowAbsoluteFrames(
