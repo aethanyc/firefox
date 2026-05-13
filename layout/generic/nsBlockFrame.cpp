@@ -1380,58 +1380,54 @@ void nsBlockFrame::WalkInlineDescendantsToReflowAbsoluteFrames(
 }
 
 void nsBlockFrame::ReflowAbsoluteFramesInInlineCB(
-    nsInlineFrame* aInline, nsPresContext* aPresContext,
+    nsContainerFrame* aInlineCB, nsPresContext* aPresContext,
     const ReflowInput& aReflowInput, ReflowOutput& aReflowOutput,
     nsReflowStatus& aStatus, OverflowAreas& aLineAbsposOverflowInBlockSpace,
     bool& aSawAbspos) {
-  auto* absCB = aInline->GetAbsoluteContainingBlock();
-  if (!absCB || !absCB->PrepareAbsoluteFrames(aInline)) {
+  auto* absCB = aInlineCB->GetAbsoluteContainingBlock();
+  if (!absCB || !absCB->PrepareAbsoluteFrames(aInlineCB)) {
     return;
   }
-  const nsRect cbRect = ComputeInlineAbsoluteCBRect(aInline);
-  // Synthesize a child ReflowInput for the inline so the abspos kid's
-  // ReflowInput chain is rooted at the inline (its CB) — needed for
-  // correct static-position computation. Init() is invoked from the
-  // ReflowInput constructor; it only mutates aInline's frame state by
-  // toggling NS_FRAME_IN_CONSTRAINED_BSIZE, which is idempotent with
-  // the value set during the inline's own reflow.
-  const WritingMode iWM = aInline->GetWritingMode();
-  const LogicalSize availSize = aInline->GetLogicalSize(iWM);
-  ReflowInput inlineReflowInput(aPresContext, aReflowInput, aInline, availSize);
+  const nsRect cbRect = ComputeInlineAbsoluteCBRect(aInlineCB);
+  const WritingMode inlineWM = aInlineCB->GetWritingMode();
+
+  // Bug 2038072: Pass an actual available block-size to split the absolute
+  // frames correctly in multicol or printing.
+  const LogicalSize availSize(inlineWM, aInlineCB->ISize(inlineWM),
+                              NS_UNCONSTRAINEDSIZE);
+  ReflowInput inlineReflowInput(aPresContext, aReflowInput, aInlineCB,
+                                availSize);
   AbsPosReflowFlags flags{AbsPosReflowFlag::AllowFragmentation,
                           AbsPosReflowFlag::CBWidthChanged,
                           AbsPosReflowFlag::CBHeightChanged};
-  OverflowAreas absposOverflow;
-  absCB->Reflow(aInline, aPresContext, inlineReflowInput, aStatus, cbRect,
-                flags, &absposOverflow);
-  // Propagate the abspos overflow up to every ancestor between aInline
-  // and this block. We re-run FinishAndStoreOverflow on each ancestor
-  // (rather than just SetOverflowAreas) so that effects-related cached
-  // state stays in sync — in particular PreEffectsBBoxProperty, which
-  // SVGIntegrationUtils::PreEffectsInkOverflowRect reads at display-
-  // list time for filter / mask / clip-path frames. We feed in the
-  // pre-effects ink overflow so ComputeEffectsRect can re-derive the
-  // post-effects rect; scrollable overflow is unaffected by effects.
-  // The abspos rect is in aInline's local coord space; translate
-  // per-ancestor as we walk up.
-  for (nsIFrame* ancestor = aInline; ancestor && ancestor != this;
+
+  // absoluteOverflow will be in aInlineCB's coordinate space.
+  OverflowAreas absoluteOverflow;
+  absCB->Reflow(aInlineCB, aPresContext, inlineReflowInput, aStatus, cbRect,
+                flags, &absoluteOverflow);
+
+  // Propagate absoluteOverflow up to every ancestor, starting from aInlineCB,
+  // and stopping before this block.
+  for (nsIFrame* ancestor = aInlineCB; ancestor && ancestor != this;
        ancestor = ancestor->GetParent()) {
-    const nsPoint offsetToAncestor = aInline->GetOffsetTo(ancestor);
-    OverflowAreas addition(
-        absposOverflow.InkOverflow() + offsetToAncestor,
-        absposOverflow.ScrollableOverflow() + offsetToAncestor);
-    OverflowAreas existing = ancestor->GetOverflowAreas();
-    existing.UnionWith(addition);
-    ancestor->FinishAndStoreOverflow(existing, ancestor->GetSize());
+    OverflowAreas ancestorOverflow = ancestor->GetOverflowAreas();
+    ancestorOverflow.UnionWithAbsoluteOverflowAreas(
+        absoluteOverflow + aInlineCB->GetOffsetTo(ancestor));
+
+    // Call FinishAndStoreOverflow() so that painting related properties are set
+    // correctly, e.g. setting PreEffectsBBoxProperty() in ComputeEffectsRect().
+    ancestor->FinishAndStoreOverflow(ancestorOverflow, ancestor->GetSize());
   }
-  // Translate absposOverflow from aInline's local coord space to this
-  // block's local coord space (line overflow and aReflowOutput are both in
-  // block-local space).
-  const nsPoint inlineToBlock = aInline->GetOffsetTo(this);
-  absposOverflow.InkOverflow() += inlineToBlock;
-  absposOverflow.ScrollableOverflow() += inlineToBlock;
-  aLineAbsposOverflowInBlockSpace.UnionWith(absposOverflow);
-  aReflowOutput.mOverflowAreas.UnionWith(absposOverflow);
+
+  // Translate absoluteOverflow from aInlineCB's coordinate space to this
+  // block's coordinate space, and add it to line and aReflowOutput's overflow
+  // area.
+  const OverflowAreas absoluteOverflowInBlockSpace =
+      absoluteOverflow + aInlineCB->GetOffsetTo(this);
+  aLineAbsposOverflowInBlockSpace.UnionWithAbsoluteOverflowAreas(
+      absoluteOverflowInBlockSpace);
+  aReflowOutput.mOverflowAreas.UnionWithAbsoluteOverflowAreas(
+      absoluteOverflowInBlockSpace);
   aSawAbspos = true;
 }
 

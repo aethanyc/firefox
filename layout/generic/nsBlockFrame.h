@@ -763,9 +763,9 @@ class nsBlockFrame : public nsContainerFrame {
    * completes so all continuation rects are stable. (Bug 489100.)
    */
   void ReflowAbsoluteDescendantsInInlineCB(nsPresContext* aPresContext,
-                                             const ReflowInput& aReflowInput,
-                                             ReflowOutput& aReflowOutput,
-                                             nsReflowStatus& aStatus);
+                                           const ReflowInput& aReflowInput,
+                                           ReflowOutput& aReflowOutput,
+                                           nsReflowStatus& aStatus);
 
   /**
    * Recursive walker used by ReflowAbsoluteDescendantsInInlineCB: visits
@@ -788,12 +788,12 @@ class nsBlockFrame : public nsContainerFrame {
    * candidate nsInlineFrame. Reflows its abspos kids using the
    * union-of-fragments CB rect and propagates the resulting overflow up to
    * every ancestor between aInline and this block, plus into
-   * aLineAbsposOverflowInBlockSpace and aReflowOutput. Sets aSawAbspos to true if
-   * any abspos kid was processed (so the caller knows to update the line's
+   * aLineAbsposOverflowInBlockSpace and aReflowOutput. Sets aSawAbspos to true
+   * if any abspos kid was processed (so the caller knows to update the line's
    * stored overflow).
    */
   void ReflowAbsoluteFramesInInlineCB(
-      nsInlineFrame* aInline, nsPresContext* aPresContext,
+      nsContainerFrame* aInline, nsPresContext* aPresContext,
       const ReflowInput& aReflowInput, ReflowOutput& aReflowOutput,
       nsReflowStatus& aStatus,
       mozilla::OverflowAreas& aLineAbsposOverflowInBlockSpace,
