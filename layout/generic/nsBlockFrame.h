@@ -764,7 +764,7 @@ class nsBlockFrame : public nsContainerFrame {
    */
   void ReflowAbsoluteDescendantsInInlineCB(nsPresContext* aPresContext,
                                              const ReflowInput& aReflowInput,
-                                             ReflowOutput& aMetrics,
+                                             ReflowOutput& aReflowOutput,
                                              nsReflowStatus& aStatus);
 
   /**
@@ -778,7 +778,7 @@ class nsBlockFrame : public nsContainerFrame {
    */
   void WalkInlineDescendantsToReflowAbsoluteFrames(
       nsIFrame* aFrame, nsPresContext* aPresContext,
-      const ReflowInput& aReflowInput, ReflowOutput& aMetrics,
+      const ReflowInput& aReflowInput, ReflowOutput& aReflowOutput,
       nsReflowStatus& aStatus,
       mozilla::OverflowAreas& aLineAbsposOverflowInBlockSpace,
       bool& aSawAbspos);
@@ -788,13 +788,13 @@ class nsBlockFrame : public nsContainerFrame {
    * candidate nsInlineFrame. Reflows its abspos kids using the
    * union-of-fragments CB rect and propagates the resulting overflow up to
    * every ancestor between aInline and this block, plus into
-   * aLineAbsposOverflowInBlockSpace and aMetrics. Sets aSawAbspos to true if
+   * aLineAbsposOverflowInBlockSpace and aReflowOutput. Sets aSawAbspos to true if
    * any abspos kid was processed (so the caller knows to update the line's
    * stored overflow).
    */
   void ReflowAbsoluteFramesInInlineCB(
       nsInlineFrame* aInline, nsPresContext* aPresContext,
-      const ReflowInput& aReflowInput, ReflowOutput& aMetrics,
+      const ReflowInput& aReflowInput, ReflowOutput& aReflowOutput,
       nsReflowStatus& aStatus,
       mozilla::OverflowAreas& aLineAbsposOverflowInBlockSpace,
       bool& aSawAbspos);
