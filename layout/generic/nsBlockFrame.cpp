@@ -1364,13 +1364,13 @@ void nsBlockFrame::WalkInlineDescendantsToReflowAbsoluteFrames(
     nsReflowStatus& aStatus, OverflowAreas& aLineAbsposOverflowInBlockSpace,
     bool& aSawAbspos) {
   if (aFrame->IsBlockFrameOrSubclass()) {
-    // Block frames will walk their inline descendant.
+    // Block frames will walk their inline descendants.
     return;
   }
-  if (aFrame->IsInlineFrameOrSubclass() && aFrame->IsAbsoluteContainer()) {
-    ReflowAbsoluteFramesInInlineCB(
-        static_cast<nsInlineFrame*>(aFrame), aPresContext, aReflowInput,
-        aReflowOutput, aStatus, aLineAbsposOverflowInBlockSpace, aSawAbspos);
+  if (nsInlineFrame* inlineFrame = do_QueryFrame(aFrame)) {
+    ReflowAbsoluteFramesInInlineCB(inlineFrame, aPresContext, aReflowInput,
+                                   aReflowOutput, aStatus,
+                                   aLineAbsposOverflowInBlockSpace, aSawAbspos);
   }
   for (nsIFrame* kid : aFrame->PrincipalChildList()) {
     WalkInlineDescendantsToReflowAbsoluteFrames(
