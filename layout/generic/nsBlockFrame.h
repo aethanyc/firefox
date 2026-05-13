@@ -762,21 +762,21 @@ class nsBlockFrame : public nsContainerFrame {
    * siblings and line-wrap continuations). Must run after line layout
    * completes so all continuation rects are stable. (Bug 489100.)
    */
-  void ReflowAbsPosOfRelposInlineDescendants(nsPresContext* aPresContext,
+  void ReflowAbsoluteDescendantsInInlineCB(nsPresContext* aPresContext,
                                              const ReflowInput& aReflowInput,
                                              ReflowOutput& aMetrics,
                                              nsReflowStatus& aStatus);
 
   /**
-   * Recursive walker used by ReflowAbsPosOfRelposInlineDescendants: visits
+   * Recursive walker used by ReflowAbsoluteDescendantsInInlineCB: visits
    * every nsInlineFrame (including subclasses such as ruby and MathML inline
    * frames) reachable from aFrame's principal child list and calls
-   * ReflowAbsPosKidsOfRelposInline on each one. Skips nested blocks (each
+   * ReflowAbsoluteFramesInInlineCB on each one. Skips nested blocks (each
    * enclosing block handles its own descendants) and recurses through
    * non-block, non-inline wrappers (e.g. nsFirstLineFrame,
    * nsRubyBaseContainerFrame) so inlines inside them are still discovered.
    */
-  void WalkInlineDescendantsToReflowAbsPosKids(
+  void WalkInlineDescendantsToReflowAbsoluteFrames(
       nsIFrame* aFrame, nsPresContext* aPresContext,
       const ReflowInput& aReflowInput, ReflowOutput& aMetrics,
       nsReflowStatus& aStatus,
@@ -784,7 +784,7 @@ class nsBlockFrame : public nsContainerFrame {
       bool& aSawAbspos);
 
   /**
-   * Helper for ReflowAbsPosOfRelposInlineDescendants: handle a single
+   * Helper for ReflowAbsoluteDescendantsInInlineCB: handle a single
    * candidate nsInlineFrame. Reflows its abspos kids using the
    * union-of-fragments CB rect and propagates the resulting overflow up to
    * every ancestor between aInline and this block, plus into
@@ -792,7 +792,7 @@ class nsBlockFrame : public nsContainerFrame {
    * any abspos kid was processed (so the caller knows to update the line's
    * stored overflow).
    */
-  void ReflowAbsPosKidsOfRelposInline(
+  void ReflowAbsoluteFramesInInlineCB(
       nsInlineFrame* aInline, nsPresContext* aPresContext,
       const ReflowInput& aReflowInput, ReflowOutput& aMetrics,
       nsReflowStatus& aStatus,

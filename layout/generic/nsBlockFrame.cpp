@@ -1298,7 +1298,8 @@ static nsRect ComputeInlineAbsoluteCBRect(const nsIFrame* aInlineFrame) {
       nsLayoutUtils::FirstContinuationOrIBSplitSibling(aInlineFrame);
   const auto* lastCont =
       nsLayoutUtils::LastContinuationOrIBSplitSibling(aInlineFrame);
-  const LogicalRect firstContRect = BorderBoxRectRelativeToInlineFrame(firstCont);
+  const LogicalRect firstContRect =
+      BorderBoxRectRelativeToInlineFrame(firstCont);
   const LogicalRect lastContRect = BorderBoxRectRelativeToInlineFrame(lastCont);
 
   // Start edges from the first continuation, end edges from the last
@@ -1318,30 +1319,27 @@ static nsRect ComputeInlineAbsoluteCBRect(const nsIFrame* aInlineFrame) {
   // [2] https://www.w3.org/TR/CSS22/visudet.html#containing-block-details
   const LogicalMargin firstBorder = firstCont->GetLogicalUsedBorder(inlineWM);
   const LogicalMargin lastBorder = lastCont->GetLogicalUsedBorder(inlineWM);
-  const LogicalMargin cbBorder(inlineWM, firstBorder.BStart(inlineWM),
-                               lastBorder.IEnd(inlineWM),
-                               lastBorder.BEnd(inlineWM),
-                               firstBorder.IStart(inlineWM));
+  const LogicalMargin cbBorder(
+      inlineWM, firstBorder.BStart(inlineWM), lastBorder.IEnd(inlineWM),
+      lastBorder.BEnd(inlineWM), firstBorder.IStart(inlineWM));
   cbRect.Deflate(inlineWM, cbBorder);
 
   return cbRect.GetPhysicalRect(inlineWM, inlineFrameSize);
 }
 
-void nsBlockFrame::ReflowAbsPosOfRelposInlineDescendants(
+void nsBlockFrame::ReflowAbsoluteDescendantsInInlineCB(
     nsPresContext* aPresContext, const ReflowInput& aReflowInput,
     ReflowOutput& aMetrics, nsReflowStatus& aStatus) {
   for (auto& line : Lines()) {
     if (line.IsBlock()) {
-      // The block on this line will run its own ReflowAbsPosOfRelposInline-
-      // Descendants for its own descendant inlines.
+      // The block on this line will run its own
+      // ReflowAbsoluteDescendantsInInlineCB() for its own descendant inlines.
       continue;
     }
     OverflowAreas lineAbsposOverflowInBlockSpace;
     bool sawAbspos = false;
-    nsIFrame* lineChild = line.mFirstChild;
-    for (int32_t i = 0, n = line.GetChildCount(); i < n;
-         ++i, lineChild = lineChild->GetNextSibling()) {
-      WalkInlineDescendantsToReflowAbsPosKids(
+    for (nsIFrame* lineChild : line.ChildFrames()) {
+      WalkInlineDescendantsToReflowAbsoluteFrames(
           lineChild, aPresContext, aReflowInput, aMetrics, aStatus,
           lineAbsposOverflowInBlockSpace, sawAbspos);
     }
@@ -1358,7 +1356,7 @@ void nsBlockFrame::ReflowAbsPosOfRelposInlineDescendants(
   }
 }
 
-void nsBlockFrame::WalkInlineDescendantsToReflowAbsPosKids(
+void nsBlockFrame::WalkInlineDescendantsToReflowAbsoluteFrames(
     nsIFrame* aFrame, nsPresContext* aPresContext,
     const ReflowInput& aReflowInput, ReflowOutput& aMetrics,
     nsReflowStatus& aStatus, OverflowAreas& aLineAbsposOverflowInBlockSpace,
@@ -1367,18 +1365,18 @@ void nsBlockFrame::WalkInlineDescendantsToReflowAbsPosKids(
     return;
   }
   if (nsInlineFrame* inlineFrame = do_QueryFrame(aFrame)) {
-    ReflowAbsPosKidsOfRelposInline(inlineFrame, aPresContext, aReflowInput,
+    ReflowAbsoluteFramesInInlineCB(inlineFrame, aPresContext, aReflowInput,
                                    aMetrics, aStatus,
                                    aLineAbsposOverflowInBlockSpace, aSawAbspos);
   }
   for (nsIFrame* kid : aFrame->PrincipalChildList()) {
-    WalkInlineDescendantsToReflowAbsPosKids(
+    WalkInlineDescendantsToReflowAbsoluteFrames(
         kid, aPresContext, aReflowInput, aMetrics, aStatus,
         aLineAbsposOverflowInBlockSpace, aSawAbspos);
   }
 }
 
-void nsBlockFrame::ReflowAbsPosKidsOfRelposInline(
+void nsBlockFrame::ReflowAbsoluteFramesInInlineCB(
     nsInlineFrame* aInline, nsPresContext* aPresContext,
     const ReflowInput& aReflowInput, ReflowOutput& aMetrics,
     nsReflowStatus& aStatus, OverflowAreas& aLineAbsposOverflowInBlockSpace,
@@ -1789,8 +1787,8 @@ void nsBlockFrame::Reflow(nsPresContext* aPresContext, ReflowOutput& aMetrics,
   if (StaticPrefs::layout_abspos_fragment_aware_inline_cb_enabled() &&
       !aReflowInput.WillReflowAgainForClearance() &&
       !aPresContext->HasPendingInterrupt()) {
-    ReflowAbsPosOfRelposInlineDescendants(aPresContext, aReflowInput, aMetrics,
-                                          reflowStatus);
+    ReflowAbsoluteDescendantsInInlineCB(aPresContext, aReflowInput, aMetrics,
+                                        reflowStatus);
   }
 
   // Let the absolutely positioned container reflow any absolutely positioned
