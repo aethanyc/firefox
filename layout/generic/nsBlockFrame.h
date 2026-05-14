@@ -756,11 +756,8 @@ class nsBlockFrame : public nsContainerFrame {
                           mozilla::OverflowAreas& aOverflowAreas);
 
   /**
-   * Reflow abspos children of any relative-positioned inline descendants in
-   * our lines. Per css-position-3 §def-cb, the containing block for those
-   * abspos children spans all fragments of the inline (including IB-split
-   * siblings and line-wrap continuations). Must run after line layout
-   * completes so all continuation rects are stable. (Bug 489100.)
+   * Reflow absolutely positioned descendants of inline containing blocks in
+   * our lines. Must be called after we reflow all the lines.
    */
   void ReflowAbsoluteDescendantsInInlineCB(nsPresContext* aPresContext,
                                            const ReflowInput& aReflowInput,
@@ -768,36 +765,34 @@ class nsBlockFrame : public nsContainerFrame {
                                            nsReflowStatus& aStatus);
 
   /**
-   * Recursive walker used by ReflowAbsoluteDescendantsInInlineCB: visits
-   * every nsInlineFrame (including subclasses such as ruby and MathML inline
-   * frames) reachable from aFrame's principal child list and calls
-   * ReflowAbsoluteFramesInInlineCB on each one. Skips nested blocks (each
-   * enclosing block handles its own descendants) and recurses through
-   * non-block, non-inline wrappers (e.g. nsFirstLineFrame,
-   * nsRubyBaseContainerFrame) so inlines inside them are still discovered.
+   * Helper for ReflowAbsoluteDescendantsInInlineCB(). Recursively visit every
+   * inline frame reachable from aFrame via its principal child list, and call
+   * ReflowAbsoluteFramesInInlineCB() on each.
+   *
+   * @param aAbsoluteOverflowInBlockSpace accumulates absolute overflow areas
+   *        in this block frame's coordinate space.
+   * @param aSawAbspos set to true if any absolute frame was reflowed.
    */
   void WalkInlineDescendantsToReflowAbsoluteFrames(
       nsIFrame* aFrame, nsPresContext* aPresContext,
       const ReflowInput& aReflowInput, ReflowOutput& aReflowOutput,
       nsReflowStatus& aStatus,
-      mozilla::OverflowAreas& aAbsoluteOverflowInBlockSpace,
-      bool& aSawAbspos);
+      mozilla::OverflowAreas& aAbsoluteOverflowInBlockSpace, bool& aSawAbspos);
 
   /**
-   * Helper for ReflowAbsoluteDescendantsInInlineCB: handle a single
-   * candidate nsInlineFrame. Reflows its abspos kids using the
-   * union-of-fragments CB rect and propagates the resulting overflow up to
-   * every ancestor between aInline and this block, plus into
-   * aAbsoluteOverflowInBlockSpace and aReflowOutput. Sets aSawAbspos to true
-   * if any abspos kid was processed (so the caller knows to update the line's
-   * stored overflow).
+   * Helper for WalkInlineDescendantsToReflowAbsoluteFrames(). Reflow the
+   * absolute frames if aInlineCB is an absolute containing block. Also,
+   * propagate absolute overflow areas to necessary ancestors.
+   *
+   * @param aAbsoluteOverflowInBlockSpace accumulates absolute overflow areas
+   *        in this block frame's coordinate space.
+   * @param aSawAbspos set to true if any absolute frame was reflowed.
    */
   void ReflowAbsoluteFramesInInlineCB(
-      nsContainerFrame* aInline, nsPresContext* aPresContext,
+      nsContainerFrame* aInlineCB, nsPresContext* aPresContext,
       const ReflowInput& aReflowInput, ReflowOutput& aReflowOutput,
       nsReflowStatus& aStatus,
-      mozilla::OverflowAreas& aAbsoluteOverflowInBlockSpace,
-      bool& aSawAbspos);
+      mozilla::OverflowAreas& aAbsoluteOverflowInBlockSpace, bool& aSawAbspos);
 
   /**
    * Find any trailing BR clear from the last line of this block (or from its
