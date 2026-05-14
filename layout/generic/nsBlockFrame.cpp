@@ -1338,12 +1338,12 @@ void nsBlockFrame::ReflowAbsoluteDescendantsInInlineCB(
       // inline absolute containing blocks.
       continue;
     }
-    OverflowAreas lineAbsposOverflowInBlockSpace;
+    OverflowAreas absoluteOverflowInBlockSpace;
     bool sawAbspos = false;
-    for (nsIFrame* lineChild : line.ChildFrames()) {
+    for (nsIFrame* kid : line.ChildFrames()) {
       WalkInlineDescendantsToReflowAbsoluteFrames(
-          lineChild, aPresContext, aReflowInput, aReflowOutput, aStatus,
-          lineAbsposOverflowInBlockSpace, sawAbspos);
+          kid, aPresContext, aReflowInput, aReflowOutput, aStatus,
+          absoluteOverflowInBlockSpace, sawAbspos);
     }
     if (sawAbspos) {
       // Update the line's stored overflow so ShouldDescendIntoLine in
@@ -1352,7 +1352,7 @@ void nsBlockFrame::ReflowAbsoluteDescendantsInInlineCB(
       // rect (computed from continuation rects only known now) wasn't
       // included.
       OverflowAreas lineOverflow = line.GetOverflowAreas();
-      lineOverflow.UnionWith(lineAbsposOverflowInBlockSpace);
+      lineOverflow.UnionWithAbsoluteOverflowAreas(absoluteOverflowInBlockSpace);
       line.SetOverflowAreas(lineOverflow);
     }
   }
@@ -1361,7 +1361,7 @@ void nsBlockFrame::ReflowAbsoluteDescendantsInInlineCB(
 void nsBlockFrame::WalkInlineDescendantsToReflowAbsoluteFrames(
     nsIFrame* aFrame, nsPresContext* aPresContext,
     const ReflowInput& aReflowInput, ReflowOutput& aReflowOutput,
-    nsReflowStatus& aStatus, OverflowAreas& aLineAbsposOverflowInBlockSpace,
+    nsReflowStatus& aStatus, OverflowAreas& aAbsoluteOverflowInBlockSpace,
     bool& aSawAbspos) {
   if (aFrame->IsBlockFrameOrSubclass()) {
     // Block frames will walk their inline descendants.
@@ -1370,19 +1370,19 @@ void nsBlockFrame::WalkInlineDescendantsToReflowAbsoluteFrames(
   if (nsInlineFrame* inlineFrame = do_QueryFrame(aFrame)) {
     ReflowAbsoluteFramesInInlineCB(inlineFrame, aPresContext, aReflowInput,
                                    aReflowOutput, aStatus,
-                                   aLineAbsposOverflowInBlockSpace, aSawAbspos);
+                                   aAbsoluteOverflowInBlockSpace, aSawAbspos);
   }
   for (nsIFrame* kid : aFrame->PrincipalChildList()) {
     WalkInlineDescendantsToReflowAbsoluteFrames(
         kid, aPresContext, aReflowInput, aReflowOutput, aStatus,
-        aLineAbsposOverflowInBlockSpace, aSawAbspos);
+        aAbsoluteOverflowInBlockSpace, aSawAbspos);
   }
 }
 
 void nsBlockFrame::ReflowAbsoluteFramesInInlineCB(
     nsContainerFrame* aInlineCB, nsPresContext* aPresContext,
     const ReflowInput& aReflowInput, ReflowOutput& aReflowOutput,
-    nsReflowStatus& aStatus, OverflowAreas& aLineAbsposOverflowInBlockSpace,
+    nsReflowStatus& aStatus, OverflowAreas& aAbsoluteOverflowInBlockSpace,
     bool& aSawAbspos) {
   auto* absCB = aInlineCB->GetAbsoluteContainingBlock();
   if (!absCB || !absCB->PrepareAbsoluteFrames(aInlineCB)) {
@@ -1420,11 +1420,11 @@ void nsBlockFrame::ReflowAbsoluteFramesInInlineCB(
   }
 
   // Translate absoluteOverflow from aInlineCB's coordinate space to this
-  // block's coordinate space, and add it to line and aReflowOutput's overflow
+  // block's coordinate space, and union it to line and aReflowOutput's overflow
   // area.
   const OverflowAreas absoluteOverflowInBlockSpace =
       absoluteOverflow + aInlineCB->GetOffsetTo(this);
-  aLineAbsposOverflowInBlockSpace.UnionWithAbsoluteOverflowAreas(
+  aAbsoluteOverflowInBlockSpace.UnionWithAbsoluteOverflowAreas(
       absoluteOverflowInBlockSpace);
   aReflowOutput.mOverflowAreas.UnionWithAbsoluteOverflowAreas(
       absoluteOverflowInBlockSpace);

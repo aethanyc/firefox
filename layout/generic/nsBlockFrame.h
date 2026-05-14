@@ -780,7 +780,7 @@ class nsBlockFrame : public nsContainerFrame {
       nsIFrame* aFrame, nsPresContext* aPresContext,
       const ReflowInput& aReflowInput, ReflowOutput& aReflowOutput,
       nsReflowStatus& aStatus,
-      mozilla::OverflowAreas& aLineAbsposOverflowInBlockSpace,
+      mozilla::OverflowAreas& aAbsoluteOverflowInBlockSpace,
       bool& aSawAbspos);
 
   /**
@@ -788,7 +788,7 @@ class nsBlockFrame : public nsContainerFrame {
    * candidate nsInlineFrame. Reflows its abspos kids using the
    * union-of-fragments CB rect and propagates the resulting overflow up to
    * every ancestor between aInline and this block, plus into
-   * aLineAbsposOverflowInBlockSpace and aReflowOutput. Sets aSawAbspos to true
+   * aAbsoluteOverflowInBlockSpace and aReflowOutput. Sets aSawAbspos to true
    * if any abspos kid was processed (so the caller knows to update the line's
    * stored overflow).
    */
@@ -796,7 +796,7 @@ class nsBlockFrame : public nsContainerFrame {
       nsContainerFrame* aInline, nsPresContext* aPresContext,
       const ReflowInput& aReflowInput, ReflowOutput& aReflowOutput,
       nsReflowStatus& aStatus,
-      mozilla::OverflowAreas& aLineAbsposOverflowInBlockSpace,
+      mozilla::OverflowAreas& aAbsoluteOverflowInBlockSpace,
       bool& aSawAbspos);
 
   /**
