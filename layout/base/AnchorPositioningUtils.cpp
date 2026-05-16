@@ -488,17 +488,21 @@ nsIFrame* AnchorPositioningUtils::FindFirstAcceptableAnchor(
   return nullptr;
 }
 
-// Find the aContainer's child that is the ancestor of aDescendant.
-static const nsIFrame* TraverseUpToContainerChild(const nsIFrame* aContainer,
-                                                  const nsIFrame* aDescendant) {
+// Return true iff aDescendant is in aContainer's subtree, treating aContainer's
+// continuations and IB-split siblings as the same container.
+static bool IsDescendantFrame(const nsIFrame* aContainer,
+                              const nsIFrame* aDescendant) {
+  const auto* containerFirstCont =
+      nsLayoutUtils::FirstContinuationOrIBSplitSibling(aContainer);
   const auto* current = aDescendant;
   while (true) {
     const auto* parent = current->GetParent();
     if (!parent) {
-      return nullptr;
+      return false;
     }
-    if (parent == aContainer) {
-      return current;
+    if (nsLayoutUtils::FirstContinuationOrIBSplitSibling(parent) ==
+        containerFirstCont) {
+      return true;
     }
     current = parent;
   }
@@ -519,28 +523,15 @@ Maybe<nsRect> AnchorPositioningUtils::GetAnchorPosRect(
       return Some(ReassembleAnchorRect(aAnchor, aAbsoluteContainingBlock));
     }
 
-    // Ok, containing block doesn't have its rect fully resolved. Figure out
-    // rect relative to the child of containing block that is also the ancestor
-    // of the anchor, and manually compute the offset.
+    // Ok, containing block doesn't have its rect fully resolved. Compute the
+    // anchor rect in aAbsoluteContainingBlock's coordinate space.
     // TODO(dshin): This wouldn't handle anchor in a previous top layer.
-    const auto* containerChild =
-        TraverseUpToContainerChild(aAbsoluteContainingBlock, aAnchor);
-    if (!containerChild) {
+    if (!IsDescendantFrame(aAbsoluteContainingBlock, aAnchor)) {
       return Nothing{};
     }
-
-    if (aAnchor == containerChild) {
-      // Anchor is the direct child of anchor's CBWM.
-      return Some(nsLayoutUtils::GetCombinedFragmentRects(aAnchor).mRect +
-                  aAnchor->GetPositionIgnoringScrolling());
-    }
-
-    // TODO(dshin): Already traversed up to find `containerChild`, and we're
-    // going to do it again here, which feels a little wasteful.
-    const nsRect rectToContainerChild =
-        nsLayoutUtils::GetCombinedFragmentRects(aAnchor).mRect;
-    const auto offset = aAnchor->GetOffsetToIgnoringScrolling(containerChild);
-    return Some(rectToContainerChild + offset + containerChild->GetPosition());
+    return Some(
+        nsLayoutUtils::GetCombinedFragmentRects(aAnchor).mRect +
+        aAnchor->GetOffsetToIgnoringScrolling(aAbsoluteContainingBlock));
   }();
   return rect.map([&](const nsRect& aRect) {
     // We need to position the border box of the anchor within the abspos
