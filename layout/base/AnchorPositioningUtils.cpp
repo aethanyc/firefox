@@ -1356,6 +1356,7 @@ nsRect AnchorPositioningUtils::ReassembleAnchorRect(
     return nsLayoutUtils::GetCombinedFragmentRects(aAnchor, nullptr).mRect +
            aAnchor->GetOffsetToIgnoringScrolling(aContainingBlock);
   }
+  const auto* const originalCB = aContainingBlock;
   aContainingBlock = GetMatchingContainingBlock(aAnchor, aContainingBlock);
   if (!aContainingBlock) {
     MOZ_ASSERT_UNREACHABLE("No matching containing block?");
@@ -1373,7 +1374,12 @@ nsRect AnchorPositioningUtils::ReassembleAnchorRect(
   if ((!fragRect.mSkippedPrevContinuation &&
        !fragRect.mSkippedNextContinuation) ||
       aContainingBlock->IsInlineOutside()) {
-    return fragRect.mRect;
+    // fragRect.mRect is in aContainingBlock's local coord space, which may
+    // differ from originalCB's when GetMatchingContainingBlock walked to a
+    // different continuation (notably for fragmented inline CBs). Translate
+    // back so the returned rect is in originalCB's coord system.
+    return fragRect.mRect +
+           aContainingBlock->GetOffsetToIgnoringScrolling(originalCB);
   }
   // Ok, we need to reassemble the unfragmented size and position of the anchor,
   // by stacking up the containing block in block direction.
