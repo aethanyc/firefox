@@ -240,8 +240,9 @@ bool IsAnchorLaidOutStrictlyBeforeElement(
   // containing blocks and positioned el's containing block is an
   // ancestor of possible anchor's containing block in the containing
   // block chain, aka one of the following:
-  if (anchorContainingBlock->FirstContinuation() !=
-      positionedContainingBlock->FirstContinuation()) {
+  if (nsLayoutUtils::FirstContinuationOrIBSplitSibling(anchorContainingBlock) !=
+      nsLayoutUtils::FirstContinuationOrIBSplitSibling(
+          positionedContainingBlock)) {
     // 2.1 positioned el's containing block is the viewport, and
     // possible anchor's containing block isn't.
     if (positionedContainingBlock->IsViewportFrame() &&
@@ -260,8 +261,10 @@ bool IsAnchorLaidOutStrictlyBeforeElement(
           return false;
         }
 
-        if (parentContainingBlock->FirstContinuation() ==
-            positionedContainingBlock->FirstContinuation()) {
+        if (nsLayoutUtils::FirstContinuationOrIBSplitSibling(
+                parentContainingBlock) ==
+            nsLayoutUtils::FirstContinuationOrIBSplitSibling(
+                positionedContainingBlock)) {
           return !it->IsAbsolutelyPositioned() ||
                  nsLayoutUtils::CompareTreePosition(it, aPositionedFrame,
                                                     aPositionedFrameAncestors,
@@ -1308,19 +1311,23 @@ static const nsIFrame* GetMatchingContainingBlock(
     const nsIFrame* aAnchor, const nsIFrame* aContainingBlock) {
   MOZ_ASSERT(nsLayoutUtils::IsProperAncestorFrameConsideringContinuations(
       aContainingBlock, aAnchor));
-  if ((!aContainingBlock->GetPrevContinuation() &&
-       !aContainingBlock->GetNextContinuation()) ||
+  const auto* firstSibling =
+      nsLayoutUtils::FirstContinuationOrIBSplitSibling(aContainingBlock);
+  const auto* lastSibling =
+      nsLayoutUtils::LastContinuationOrIBSplitSibling(aContainingBlock);
+  // Fast path: aContainingBlock has no continuations / IB-split siblings, or
+  // aContainingBlock itself is already a proper ancestor.
+  if ((firstSibling == aContainingBlock && lastSibling == aContainingBlock) ||
       nsLayoutUtils::IsProperAncestorFrame(aContainingBlock, aAnchor)) {
     return aContainingBlock;
   }
-  for (const auto* f = aContainingBlock->GetPrevContinuation(); f;
-       f = f->GetPrevContinuation()) {
-    if (nsLayoutUtils::IsProperAncestorFrame(f, aAnchor)) {
-      return f;
+  // Walk the continuation + IB-split-sibling chain to find a member that's a
+  // proper ancestor of the anchor.
+  for (const auto* f = firstSibling; f;
+       f = nsLayoutUtils::GetNextContinuationOrIBSplitSibling(f)) {
+    if (f == aContainingBlock) {
+      continue;
     }
-  }
-  for (const auto* f = aContainingBlock->GetNextContinuation(); f;
-       f = f->GetNextContinuation()) {
     if (nsLayoutUtils::IsProperAncestorFrame(f, aAnchor)) {
       return f;
     }
