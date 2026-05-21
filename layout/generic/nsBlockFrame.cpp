@@ -1285,14 +1285,19 @@ static nsRect ComputeInlineAbsoluteCBRect(const nsInlineFrame* aInlineFrame) {
              "Why computing the rect if it is not an absolute container?");
 
   const auto cbwm = aInlineFrame->GetWritingMode();
-  const auto inlineFrameSize = aInlineFrame->GetSize();
+
+  // To convert between physical and logical rects, the LogicalRect API requires
+  // a container size for RTL / vertical writing mode. Any container size works
+  // in this function because the same size is used for both the conversion in
+  // LogicalRect constructor and the conversion to the returned physical rect.
+  const nsSize dummyContainerSize;
 
   // A helper to get aFrame's border-box rect relative to aInlineFrame, in
   // aInlineFrame's writing mode.
   auto BorderBoxRectRelativeToInlineFrame = [&](const nsIFrame* aFrame) {
     const nsRect physicalRect =
         aFrame->GetRectRelativeToSelf() + aFrame->GetOffsetTo(aInlineFrame);
-    return LogicalRect(cbwm, physicalRect, inlineFrameSize);
+    return LogicalRect(cbwm, physicalRect, dummyContainerSize);
   };
 
   const auto* firstCont =
@@ -1325,7 +1330,7 @@ static nsRect ComputeInlineAbsoluteCBRect(const nsInlineFrame* aInlineFrame) {
                                firstBorder.IStart(cbwm));
   cbRect.Deflate(cbwm, cbBorder);
 
-  return cbRect.GetPhysicalRect(cbwm, inlineFrameSize);
+  return cbRect.GetPhysicalRect(cbwm, dummyContainerSize);
 }
 
 void nsBlockFrame::ReflowAbsoluteDescendantsInInlineFrame(
