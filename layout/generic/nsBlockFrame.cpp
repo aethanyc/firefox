@@ -1369,12 +1369,9 @@ void nsBlockFrame::ReflowAbsoluteDescendantsInInlineFrame(
 Maybe<OverflowAreas> nsBlockFrame::WalkInlineDescendantsToReflowAbsoluteFrames(
     nsIFrame* aFrame, nsPresContext* aPresContext,
     const ReflowInput& aReflowInput, nsReflowStatus& aStatus) {
-  MOZ_ASSERT(aFrame->IsLineParticipant(),
-             "This function is only relevant for line participants!");
-
-  if (aFrame->IsBlockFrameOrSubclass()) {
-    // Block frames (e.g. 'inline-block') will walk their own inline
-    // descendants.
+  nsInlineFrame* inlineFrame = do_QueryFrame(aFrame);
+  if (!inlineFrame) {
+    // We walk only inline frame (and its subclasses).
     return Nothing();
   }
 
@@ -1382,7 +1379,7 @@ Maybe<OverflowAreas> nsBlockFrame::WalkInlineDescendantsToReflowAbsoluteFrames(
   // descendants, in aFrame's coordinate space.
   OverflowAreas absposOverflow;
 
-  // Traverse the kids first, and translate each kid's overflow areas into
+  // Traverse aFrame's kids first, and translate each kid's overflow areas to
   // aFrame's coordinate space and accumulate.
   for (nsIFrame* kid : aFrame->PrincipalChildList()) {
     if (auto absposOverflowFromKid =
@@ -1393,13 +1390,11 @@ Maybe<OverflowAreas> nsBlockFrame::WalkInlineDescendantsToReflowAbsoluteFrames(
     }
   }
 
-  if (nsInlineFrame* inlineFrame = do_QueryFrame(aFrame)) {
-    // Reflow aFrame's own abspos kids, and accumulate their overflow areas.
-    if (auto absposOverflowFromInlineFrame = ReflowAbsoluteFramesInInlineFrame(
-            inlineFrame, aPresContext, aReflowInput, aStatus)) {
-      absposOverflow.UnionWithAbsoluteOverflowAreas(
-          *absposOverflowFromInlineFrame);
-    }
+  // Reflow aFrame's abspos kids, and accumulate their overflow areas.
+  if (auto absposOverflowFromInlineFrame = ReflowAbsoluteFramesInInlineFrame(
+          inlineFrame, aPresContext, aReflowInput, aStatus)) {
+    absposOverflow.UnionWithAbsoluteOverflowAreas(
+        *absposOverflowFromInlineFrame);
   }
 
   if (absposOverflow == OverflowAreas()) {
