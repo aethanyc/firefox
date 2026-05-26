@@ -1797,6 +1797,13 @@ void nsBlockFrame::Reflow(nsPresContext* aPresContext, ReflowOutput& aMetrics,
   // Factor pushed float child bounds into the overflow area
   aMetrics.mOverflowAreas.UnionWith(trialState.mFcBounds);
 
+  if (!aReflowInput.WillReflowAgainForClearance() &&
+      !aPresContext->HasPendingInterrupt()) {
+    for (auto& line : Lines()) {
+      MOZ_ASSERT(!line.IsDirty(), "Each line should be clean after reflow!");
+    }
+  }
+
   // Reflow absolute descendants of inline absolute containing blocks after all
   // the lines are reflowed and placed.
   if (StaticPrefs::layout_abspos_fragment_aware_inline_cb_enabled() &&
@@ -7259,16 +7266,6 @@ void nsBlockFrame::DoRemoveFrame(DestroyContext& aContext,
       // we will be removing the line anyway, see below.
       line->mFirstChild = aDeletedFrame->GetNextSibling();
     }
-
-    // Hmm, this won't do anything if we're removing a frame in the first
-    // overflow line... Hopefully doesn't matter
-    --line;
-    if (line != line_end && !line->IsBlock()) {
-      // Since we just removed a frame that follows some inline
-      // frames, we need to reflow the previous line.
-      line->MarkDirty();
-    }
-    ++line;
 
     // Take aDeletedFrame out of the sibling list. Note that
     // prevSibling will only be nullptr when we are deleting the very
