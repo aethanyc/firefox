@@ -1436,6 +1436,31 @@ Maybe<OverflowAreas> nsBlockFrame::WalkInlineDescendantsToReflowAbsoluteFrames(
   return Some(absposOverflow);
 }
 
+// Return true if aInlineFrame (an inline absolute containing block laid out in
+// aBlock) continues into a next fragmentainer (column/page).
+//
+// Note: We can't rely on walking in-flow chain into a different fragmentainer
+// here because the aBlockFrame's next-in-flow hasn't been created yet.
+static bool IsInlineFrameContinuingInNextFragmentainer(
+    const nsBlockFrame* aBlockFrame, const nsInlineFrame* aInlineFrame) {
+  if (!aBlockFrame->HasOverflowLines()) {
+    return false;
+  }
+  const nsBlockFrame::FrameLines* overflowLines =
+      aBlockFrame->GetOverflowLines();
+  for (const nsIFrame* cont = aInlineFrame; cont;
+       cont = nsLayoutUtils::GetNextContinuationOrIBSplitSibling(cont)) {
+    const nsIFrame* lineLevel = cont;
+    while (lineLevel && lineLevel->GetParent() != aBlockFrame) {
+      lineLevel = lineLevel->GetParent();
+    }
+    if (lineLevel && overflowLines->mFrames.ContainsFrame(lineLevel)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 Maybe<OverflowAreas> nsBlockFrame::ReflowAbsoluteFramesInInlineFrame(
     nsInlineFrame* aInlineFrame, nsPresContext* aPresContext,
     const ReflowInput& aReflowInput, nsReflowStatus& aStatus) {
@@ -1444,22 +1469,31 @@ Maybe<OverflowAreas> nsBlockFrame::ReflowAbsoluteFramesInInlineFrame(
     return Nothing();
   }
 
-  // TODO(Bug 2038072): After we support splitting abspos frames in multicol or
-  // printing, a later inline continuation might have abspos kids.
-  MOZ_ASSERT(!aInlineFrame->GetPrevInFlow(),
-             "Only the first inline continuation can have absolute kids!");
-
   const nsRect cbRect = ComputeInlineAbsoluteCBRect(aInlineFrame);
   const WritingMode cbwm = aInlineFrame->GetWritingMode();
 
-  // TODO(Bug 2038072): Pass an actual available block-size to split the abspos
-  // frames correctly in multicol or printing.
-  const LogicalSize availSize(cbwm, aInlineFrame->ISize(cbwm),
-                              NS_UNCONSTRAINEDSIZE);
+  // The inline-size in availSize is not important because abspos kids use
+  // cbRect to resolve their inline-size.
+  //
+  // For an inline CB in fragmentation context, AbsoluteContainingBlock stores
+  // kid's unfragmented position in *this* block's coordinate space. Therefore,
+  // using this block frame's available block-size is correct, and we don't need
+  // to subtract the inline CB's position.
+  LogicalSize availSize =
+      aReflowInput.AvailableSize().ConvertTo(cbwm, GetWritingMode());
+
+  if (availSize.BSize(cbwm) != NS_UNCONSTRAINEDSIZE &&
+      !IsInlineFrameContinuingInNextFragmentainer(this, aInlineFrame)) {
+    // This block frame holds the inline CB's last fragment. We use an
+    // unconstrained block-size to workaround an architectural limitation that
+    // inline frames have no overflow container to hold overflowing abspos kids.
+    // As such, kids may overflow the fragmentainer if they are too tall.
+    availSize.BSize(cbwm) = NS_UNCONSTRAINEDSIZE;
+  }
   ReflowInput inlineRI(aPresContext, aReflowInput, aInlineFrame, availSize);
 
-  // TODO(Bug 2038072): Add AbsPosReflowFlag::AllowFragmentation flag.
-  AbsPosReflowFlags flags{AbsPosReflowFlag::CBWidthChanged,
+  AbsPosReflowFlags flags{AbsPosReflowFlag::AllowFragmentation,
+                          AbsPosReflowFlag::CBWidthChanged,
                           AbsPosReflowFlag::CBHeightChanged};
 
   // absoluteOverflow is in aInlineFrame's coordinate space.

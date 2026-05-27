@@ -4360,6 +4360,16 @@ void nsIFrame::BuildDisplayListForChild(nsDisplayListBuilder* aBuilder,
 
     child = childOrOutOfFlow;
 
+    // For an inline frame as an absolute containing block, build the display
+    // items for the abspos kid's continuations here; the kid itself is built
+    // below.
+    if (parent->IsInlineFrameOrSubclass() && child->IsAbsolutelyPositioned()) {
+      for (nsIFrame* cont = child->GetNextContinuation(); cont;
+           cont = cont->GetNextContinuation()) {
+        BuildDisplayListForChild(aBuilder, cont, aLists);
+      }
+    }
+
     // If 'child' is a pushed out-of-flow then it's owned by a block that's not
     // an ancestor of the placeholder, and it will be painted by that block and
     // should not be painted through the placeholder. Also recheck
@@ -8839,6 +8849,11 @@ bool nsIFrame::IsBlockWrapper() const {
 bool nsIFrame::IsBlockFrameOrSubclass() const {
   const nsBlockFrame* thisAsBlock = do_QueryFrame(this);
   return !!thisAsBlock;
+}
+
+bool nsIFrame::IsInlineFrameOrSubclass() const {
+  const nsInlineFrame* asInline = do_QueryFrame(this);
+  return !!asInline;
 }
 
 bool nsIFrame::IsImageFrameOrSubclass() const {

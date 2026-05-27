@@ -337,6 +337,18 @@ class nsLayoutUtils {
                                          const nsIFrame* aStopAt = nullptr);
 
   /**
+   * Given a frame, search up the frame tree (including aFrame itself) for the
+   * nearest fragmentainer, which is either a -moz-column-content block in
+   * multicol, or an nsPageContentFrame in paginated context. Two frames are in
+   * the same fragmentainer iff this returns the same frame for both.
+   *
+   * @param aFrame the frame to start at
+   * @return the nearest fragmentainer frame, or nullptr if aFrame is not inside
+   *         a fragmentation context.
+   */
+  static const nsIFrame* GetNearestFragmentainer(const nsIFrame* aFrame);
+
+  /**
    * Given a frame, search up the frame tree until we find an
    * ancestor that (or the frame itself) is a "Page" frame, if any.
    *
