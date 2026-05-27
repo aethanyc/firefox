@@ -16,6 +16,7 @@
 #include "BlockReflowState.h"
 #include "CounterStyleManager.h"
 #include "TextOverflow.h"
+#include "mozilla/WritingModes.h"
 #ifdef DEBUG
 #  include "fmt/base.h"
 #endif
@@ -1353,7 +1354,7 @@ void nsBlockFrame::ReflowAbsoluteDescendantsInInlineFrame(
     OverflowAreas lineAbsposOverflow;
     for (nsIFrame* kid : line.ChildFrames()) {
       if (auto kidOverflow = WalkInlineDescendantsToReflowAbsoluteFrames(
-              kid, aPresContext, aReflowInput, aStatus)) {
+              kid, aPresContext, aReflowInput, aReflowOutput, aStatus)) {
         lineAbsposOverflow.UnionWithAbsoluteOverflowAreas(*kidOverflow +
                                                           kid->GetPosition());
       }
@@ -1376,7 +1377,8 @@ void nsBlockFrame::ReflowAbsoluteDescendantsInInlineFrame(
 
 Maybe<OverflowAreas> nsBlockFrame::WalkInlineDescendantsToReflowAbsoluteFrames(
     nsIFrame* aFrame, nsPresContext* aPresContext,
-    const ReflowInput& aReflowInput, nsReflowStatus& aStatus) {
+    const ReflowInput& aReflowInput, const ReflowOutput& aReflowOutput,
+    nsReflowStatus& aStatus) {
   if (aFrame->IsBlockFrameOrSubclass()) {
     // Block frames (e.g. 'inline-block') will walk their own inline
     // descendants.
@@ -1393,7 +1395,7 @@ Maybe<OverflowAreas> nsBlockFrame::WalkInlineDescendantsToReflowAbsoluteFrames(
   for (nsIFrame* kid : aFrame->PrincipalChildList()) {
     if (auto absposOverflowFromKid =
             WalkInlineDescendantsToReflowAbsoluteFrames(
-                kid, aPresContext, aReflowInput, aStatus)) {
+                kid, aPresContext, aReflowInput, aReflowOutput, aStatus)) {
       absposOverflow.UnionWithAbsoluteOverflowAreas(*absposOverflowFromKid +
                                                     kid->GetPosition());
     }
@@ -1403,7 +1405,7 @@ Maybe<OverflowAreas> nsBlockFrame::WalkInlineDescendantsToReflowAbsoluteFrames(
     // If aFrames is an inline frame (or a subclass of inline frame), reflow its
     // abspos kids, and accumulate their overflow areas.
     if (auto absposOverflowFromInlineFrame = ReflowAbsoluteFramesInInlineFrame(
-            inlineFrame, aPresContext, aReflowInput, aStatus)) {
+            inlineFrame, aPresContext, aReflowInput, aReflowOutput, aStatus)) {
       absposOverflow.UnionWithAbsoluteOverflowAreas(
           *absposOverflowFromInlineFrame);
     }
@@ -1425,28 +1427,35 @@ Maybe<OverflowAreas> nsBlockFrame::WalkInlineDescendantsToReflowAbsoluteFrames(
 
 Maybe<OverflowAreas> nsBlockFrame::ReflowAbsoluteFramesInInlineFrame(
     nsInlineFrame* aInlineFrame, nsPresContext* aPresContext,
-    const ReflowInput& aReflowInput, nsReflowStatus& aStatus) {
+    const ReflowInput& aReflowInput, const ReflowOutput& aReflowOutput,
+    nsReflowStatus& aStatus) {
   auto* absCB = aInlineFrame->GetAbsoluteContainingBlock();
   if (!absCB || !absCB->PrepareAbsoluteFrames(aInlineFrame)) {
     return Nothing();
   }
 
-  // TODO(Bug 2038072): After we support splitting abspos frames in multicol or
-  // printing, a later inline continuation might have abspos kids.
-  MOZ_ASSERT(!aInlineFrame->GetPrevInFlow(),
-             "Only the first inline continuation can have absolute kids!");
+  // MOZ_ASSERT(!aInlineFrame->GetPrevInFlow(),
+  //            "Only the first inline continuation can have absolute kids!");
 
   const nsRect cbRect = ComputeInlineAbsoluteCBRect(aInlineFrame);
   const WritingMode cbwm = aInlineFrame->GetWritingMode();
 
-  // TODO(Bug 2038072): Pass an actual available block-size to split the abspos
-  // frames correctly in multicol or printing.
-  const LogicalSize availSize(cbwm, aInlineFrame->ISize(cbwm),
-                              NS_UNCONSTRAINEDSIZE);
+  const nsSize thisBlockSize = aReflowOutput.PhysicalSize();
+  nscoord availBSize = aReflowInput.AvailableSize()
+                           .ConvertTo(cbwm, GetWritingMode())
+                           .BSize(cbwm);
+  if (availBSize != NS_UNCONSTRAINEDSIZE) {
+    const nscoord inlineFrameBStart =
+        aInlineFrame->GetLogicalPosition(cbwm, thisBlockSize).B(cbwm);
+    availBSize = std::max(0, availBSize - inlineFrameBStart);
+  }
+
+  const LogicalRect logicalCBRect(cbwm, cbRect, thisBlockSize);
+  const LogicalSize availSize(cbwm, logicalCBRect.ISize(cbwm), availBSize);
   ReflowInput inlineRI(aPresContext, aReflowInput, aInlineFrame, availSize);
 
-  // TODO(Bug 2038072): Add AbsPosReflowFlag::AllowFragmentation flag.
-  AbsPosReflowFlags flags{AbsPosReflowFlag::CBWidthChanged,
+  AbsPosReflowFlags flags{AbsPosReflowFlag::AllowFragmentation,
+                          AbsPosReflowFlag::CBWidthChanged,
                           AbsPosReflowFlag::CBHeightChanged};
 
   // absoluteOverflow is in aInlineFrame's coordinate space.

@@ -143,6 +143,40 @@ static LogicalSize* GetUnfragmentedSize(const ReflowInput& aCBReflowInput,
              : aFrame->FirstInFlow()->GetProperty(UnfragmentedSizeProperty());
 }
 
+// Walks aInlineFrame's prev-in-flow chain and returns the *first* continuation
+// (in flow order) of the previous fragmentainer relative to aInlineFrame.
+// Returns nullptr if no continuation in a different fragmentainer exists.
+//
+// Two inline continuations linked via prev/next-in-flow live in the same
+// fragmentainer iff they share the same parent: line-wrapping within a
+// column/page creates additional continuations but does not change the parent
+// block. We need the *first* continuation of the previous fragmentainer (not
+// the last), because only first-in-fragmentainer continuations actually run
+// Reflow and therefore own mPushedAbsoluteFrames.
+static nsIFrame* GetPrevInlineContinuationInDifferentFragmentainer(
+    const nsIFrame* aInlineFrame) {
+  const nsIFrame* myParent = aInlineFrame->GetParent();
+  nsIFrame* candidate = nullptr;
+  const nsIFrame* candidateParent = nullptr;
+  for (nsIFrame* prev = aInlineFrame->GetPrevInFlow(); prev;
+       prev = prev->GetPrevInFlow()) {
+    const nsIFrame* prevParent = prev->GetParent();
+    if (prevParent == myParent) {
+      continue;
+    }
+    if (!candidate) {
+      candidate = prev;
+      candidateParent = prevParent;
+    } else if (prevParent != candidateParent) {
+      // Walked back past the previous fragmentainer; stop.
+      break;
+    } else {
+      candidate = prev;
+    }
+  }
+  return candidate;
+}
+
 nsFrameList AbsoluteContainingBlock::StealPushedChildList() {
   return std::move(mPushedAbsoluteFrames);
 }
@@ -173,7 +207,16 @@ void AbsoluteContainingBlock::DrainPushedChildList(
 
 bool AbsoluteContainingBlock::PrepareAbsoluteFrames(
     nsContainerFrame* aDelegatingFrame) {
-  if (const nsIFrame* prevInFlow = aDelegatingFrame->GetPrevInFlow()) {
+  // For inline CBs, multiple continuations can live in the same fragmentainer
+  // (one per line). Pulled pushed frames must come from the previous
+  // continuation that lives in a *different* fragmentainer, not just from the
+  // immediate prev-in-flow.
+  const nsIFrame* prevInFlow =
+      aDelegatingFrame->IsInlineFrame()
+          ? GetPrevInlineContinuationInDifferentFragmentainer(aDelegatingFrame)
+          : aDelegatingFrame->GetPrevInFlow();
+  printf("aDelegatingFrame %p, prevInFlow %p\n", aDelegatingFrame, prevInFlow);
+  if (prevInFlow) {
     AbsoluteContainingBlock* prevAbsCB =
         prevInFlow->GetAbsoluteContainingBlock();
     MOZ_ASSERT(prevAbsCB,
@@ -1726,10 +1769,6 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
 
         // Don't split if told not to (e.g. for fixed frames)
         aFlags.contains(AbsPosReflowFlag::AllowFragmentation) &&
-
-        // TODO(Bug 2038072): Support splitting abspos frames under inline
-        // absolute containing blocks.
-        !aDelegatingFrame->IsInlineFrame() &&
 
         // Bug 1588623: Support splitting absolute positioned multicol
         // containers.
