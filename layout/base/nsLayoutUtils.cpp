@@ -1000,6 +1000,18 @@ const nsIFrame* nsLayoutUtils::GetPageFrame(const nsIFrame* aFrame) {
 }
 
 /* static */
+const nsIFrame* nsLayoutUtils::GetNearestFragmentainer(const nsIFrame* aFrame) {
+  for (const nsIFrame* f = aFrame; f; f = f->GetParent()) {
+    if (f->Style()->GetPseudoType() ==
+            mozilla::PseudoStyleType::MozColumnContent ||
+        f->IsPageContentFrame()) {
+      return f;
+    }
+  }
+  return nullptr;
+}
+
+/* static */
 nsIFrame* nsLayoutUtils::GetStyleFrame(nsIFrame* aPrimaryFrame) {
   MOZ_ASSERT(aPrimaryFrame);
   if (const nsTableWrapperFrame* const table = do_QueryFrame(aPrimaryFrame)) {
