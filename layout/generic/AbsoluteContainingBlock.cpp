@@ -22,6 +22,7 @@
 #include "nsContainerFrame.h"
 #include "nsGridContainerFrame.h"
 #include "nsIFrameInlines.h"
+#include "nsLayoutUtils.h"
 #include "nsPlaceholderFrame.h"
 #include "nsPresContext.h"
 #include "nsPresContextInlines.h"
@@ -143,6 +144,74 @@ static LogicalSize* GetUnfragmentedSize(const ReflowInput& aCBReflowInput,
              : aFrame->FirstInFlow()->GetProperty(UnfragmentedSizeProperty());
 }
 
+// Walk aInlineFrame's prev-in-flow chain and return the *first* fragment near
+// the start-most edges of the previous fragmentainer (not the first fragment we
+// encountered during the walk). Or return nullptr if no such fragment in the
+// previous fragmentainer or no previous fragmentainer.
+static nsIFrame* GetFirstInlineFragmentInPrevFragmentainer(
+    const nsIFrame* aInlineFrame) {
+  MOZ_ASSERT(aInlineFrame->IsInlineFrameOrSubclass());
+  const nsIFrame* myFragmentainer =
+      nsLayoutUtils::GetNearestFragmentainer(aInlineFrame);
+  nsIFrame* candidate = nullptr;
+  const nsIFrame* candidateFragmentainer = nullptr;
+  for (nsIFrame* prev = aInlineFrame->GetPrevInFlow(); prev;
+       prev = prev->GetPrevInFlow()) {
+    const nsIFrame* prevFragmentainer =
+        nsLayoutUtils::GetNearestFragmentainer(prev);
+    if (prevFragmentainer == myFragmentainer) {
+      continue;
+    }
+    if (!candidate) {
+      candidate = prev;
+      candidateFragmentainer = prevFragmentainer;
+    } else if (prevFragmentainer == candidateFragmentainer) {
+      // Continue to walk until we reach the first fragment in the previous
+      // fragmentainer.
+      candidate = prev;
+    } else {
+      // Walked back past the candidate fragmentainer. Stop here.
+      break;
+    }
+  }
+  return candidate;
+}
+
+// Walk aInlineFrame's next-in-flow chain and return the *first* fragment near
+// the start-most edges of the next fragmentainer. Or return nullptr if no such
+// fragment in the next fragmentainer or no next fragmentainer.
+static nsIFrame* GetFirstInlineFragmentInNextFragmentainer(
+    const nsIFrame* aInlineFrame) {
+  MOZ_ASSERT(aInlineFrame->IsInlineFrameOrSubclass());
+  const nsIFrame* myFragmentainer =
+      nsLayoutUtils::GetNearestFragmentainer(aInlineFrame);
+  for (nsIFrame* next = aInlineFrame->GetNextInFlow(); next;
+       next = next->GetNextInFlow()) {
+    if (nsLayoutUtils::GetNearestFragmentainer(next) != myFragmentainer) {
+      return next;
+    }
+  }
+  return nullptr;
+}
+
+// Return aFrame's first fragment in the previous fragmentainer, or nullptr if
+// there is none. For a block CB this is just the prev-in-flow. For an inline
+// CB, multiple fragments can live in a fragmentainer, but only the first
+// fragment in each fragmentainer owns and reflows the abspos children, so we
+// walk back to that first fragment rather than the immediate prev-in-flow.
+static nsIFrame* GetFirstFragmentInPrevFragmentainer(const nsIFrame* aFrame) {
+  return aFrame->IsInlineFrameOrSubclass()
+             ? GetFirstInlineFragmentInPrevFragmentainer(aFrame)
+             : aFrame->GetPrevInFlow();
+}
+
+// See the comment in GetFirstFragmentInPrevFragmentainer().
+static nsIFrame* GetFirstFragmentInNextFragmentainer(const nsIFrame* aFrame) {
+  return aFrame->IsInlineFrameOrSubclass()
+             ? GetFirstInlineFragmentInNextFragmentainer(aFrame)
+             : aFrame->GetNextInFlow();
+}
+
 nsFrameList AbsoluteContainingBlock::StealPushedChildList() {
   return std::move(mPushedAbsoluteFrames);
 }
@@ -173,11 +242,11 @@ void AbsoluteContainingBlock::DrainPushedChildList(
 
 bool AbsoluteContainingBlock::PrepareAbsoluteFrames(
     nsContainerFrame* aDelegatingFrame) {
-  if (const nsIFrame* prevInFlow = aDelegatingFrame->GetPrevInFlow()) {
-    AbsoluteContainingBlock* prevAbsCB =
-        prevInFlow->GetAbsoluteContainingBlock();
+  if (const nsIFrame* prevFrag =
+          GetFirstFragmentInPrevFragmentainer(aDelegatingFrame)) {
+    AbsoluteContainingBlock* prevAbsCB = prevFrag->GetAbsoluteContainingBlock();
     MOZ_ASSERT(prevAbsCB,
-               "If this delegating frame has an absCB, its prev-in-flow must "
+               "If this delegating frame has an absCB, |prevFrag| must "
                "have one, too!");
 
     // Prepend the pushed absolute frames from the previous absCB to our
@@ -215,16 +284,17 @@ bool AbsoluteContainingBlock::PrepareAbsoluteFrames(
   // our child list.
   DrainPushedChildList(aDelegatingFrame);
 
-  // Steal absolute frame's first-in-flow from our next-in-flow's child lists.
-  for (const nsIFrame* nextInFlow = aDelegatingFrame->GetNextInFlow();
-       nextInFlow; nextInFlow = nextInFlow->GetNextInFlow()) {
-    AbsoluteContainingBlock* nextAbsCB =
-        nextInFlow->GetAbsoluteContainingBlock();
+  // Steal absolute frame's first-in-flow from the child list of our
+  // next-in-flow appears as the first fragment in each fragmentainer.
+  for (const nsIFrame* nextFrag =
+           GetFirstFragmentInNextFragmentainer(aDelegatingFrame);
+       nextFrag; nextFrag = GetFirstFragmentInNextFragmentainer(nextFrag)) {
+    AbsoluteContainingBlock* nextAbsCB = nextFrag->GetAbsoluteContainingBlock();
     MOZ_ASSERT(nextAbsCB,
-               "If this delegating frame has an absCB, its next-in-flow must "
+               "If this delegating frame has an absCB, |nextFrag| must "
                "have one, too!");
 
-    nextAbsCB->DrainPushedChildList(nextInFlow);
+    nextAbsCB->DrainPushedChildList(nextFrag);
 
     for (auto iter = nextAbsCB->GetChildList().begin();
          iter != nextAbsCB->GetChildList().end();) {
@@ -650,7 +720,8 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
   SanityCheckChildListsBeforeReflow(aDelegatingFrame);
 #endif
 
-  if (nsIFrame* prevInFlow = aDelegatingFrame->GetPrevInFlow()) {
+  if (const nsIFrame* prevInFlow =
+          GetFirstFragmentInPrevFragmentainer(aDelegatingFrame)) {
     const auto* prevAbsCB = prevInFlow->GetAbsoluteContainingBlock();
     MOZ_ASSERT(prevAbsCB,
                "If this delegating frame has an absCB, its prev-in-flow must "
@@ -741,9 +812,17 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
                             reuseUnfragmentedAnchorPosReferences);
 
         if (aReflowInput.mFlags.mIsInFragmentainerMeasuringReflow) {
-          kidFrame->SetOrUpdateDeletableProperty(
-              UnfragmentedPositionProperty(),
-              kidFrame->GetLogicalPosition(containerWM, cbBorderBoxSize));
+          LogicalPoint unfragPos =
+              kidFrame->GetLogicalPosition(containerWM, cbBorderBoxSize);
+          if (aDelegatingFrame->IsInlineFrameOrSubclass()) {
+            // For an inline CB, store the unfragmented position in its parent
+            // block's coordinate space, which is consistent and continuous
+            // across columns/pages.
+            unfragPos += aDelegatingFrame->GetLogicalPosition(containerWM,
+                                                              cbBorderBoxSize);
+          }
+          kidFrame->SetOrUpdateDeletableProperty(UnfragmentedPositionProperty(),
+                                                 unfragPos);
 
           const LogicalSize kidSize =
               kidFrame->StylePosition()->mBoxSizing == StyleBoxSizing::BorderBox
@@ -780,7 +859,7 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
           nextFrame->AddStateBits(NS_FRAME_IS_PUSHED_OUT_OF_FLOW);
           newPushedAbsoluteFrames.AppendFrame(nullptr, nextFrame);
         } else if (nextFrame->GetParent() !=
-                   aDelegatingFrame->GetNextInFlow()) {
+                   GetFirstFragmentInNextFragmentainer(aDelegatingFrame)) {
           nextFrame->GetParent()->GetAbsoluteContainingBlock()->StealFrame(
               nextFrame);
           // nextFrame is in a later absCB continuation. To keep the
@@ -1727,9 +1806,10 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
         // Don't split if told not to (e.g. for fixed frames)
         aFlags.contains(AbsPosReflowFlag::AllowFragmentation) &&
 
-        // TODO(Bug 2038072): Support splitting abspos frames under inline
-        // absolute containing blocks.
-        !aDelegatingFrame->IsInlineFrame() &&
+        // With the legacy behavior, don't split abspos frames under the inline
+        // as absolute containing block.
+        (StaticPrefs::layout_abspos_fragment_aware_inline_cb_enabled() ||
+         !aDelegatingFrame->IsInlineFrameOrSubclass()) &&
 
         // Bug 1588623: Support splitting absolute positioned multicol
         // containers.
@@ -1857,9 +1937,27 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
         kidPos.B(outerWM) -= mCumulativeContainingBlockBSize;
       } else {
         // aKidFrame is a next-in-flow. Place it at the block-edge start of its
-        // containing block, with the same inline-position as its prev-in-flow.
-        kidPos = LogicalPoint(
-            outerWM, kidPrevInFlow->IStart(outerWM, cbBorderBoxSize), 0);
+        // current fragmentainer in the block-axis, with the inline-axis
+        // matching its prev-in-flow.
+        nscoord iStart = kidPrevInFlow->IStart(outerWM, cbBorderBoxSize);
+        if (aDelegatingFrame->IsInlineFrameOrSubclass()) {
+          // iStart is relative to kidPrevInFlow's parent. Translate it into the
+          // coordinate space of that parent's parent block, so that when we
+          // later translate it back into aDelegatingFrame's coordinate space,
+          // the kid is at the same inline position within each column/page.
+          iStart += kidPrevInFlow->GetParent()
+                        ->GetLogicalPosition(outerWM, cbBorderBoxSize)
+                        .I(outerWM);
+        }
+        kidPos = LogicalPoint(outerWM, iStart, 0);
+      }
+      if (aDelegatingFrame->IsInlineFrameOrSubclass()) {
+        // For an inline CB, kidPos is currently in the coordinate space of
+        // aDelegatingFrame's parent block (see the comment where we set the
+        // UnfragmentedPositionProperty). SetRect() expects a position relative
+        // to the kid's parent, i.e. aDelegatingFrame, so translate it back.
+        kidPos -=
+            aDelegatingFrame->GetLogicalPosition(outerWM, cbBorderBoxSize);
       }
       const LogicalSize kidSize = kidDesiredSize.Size(outerWM);
       const LogicalRect kidRect(outerWM, kidPos, kidSize);
