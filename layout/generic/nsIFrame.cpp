@@ -8807,6 +8807,11 @@ bool nsIFrame::IsBlockFrameOrSubclass() const {
   return !!thisAsBlock;
 }
 
+bool nsIFrame::IsInlineFrameOrSubclass() const {
+  const nsInlineFrame* asInline = do_QueryFrame(this);
+  return !!asInline;
+}
+
 bool nsIFrame::IsImageFrameOrSubclass() const {
   const nsImageFrame* asImage = do_QueryFrame(this);
   return !!asImage;
