@@ -1434,13 +1434,10 @@ Maybe<OverflowAreas> nsBlockFrame::ReflowAbsoluteFramesInInlineFrame(
     return Nothing();
   }
 
-  // MOZ_ASSERT(!aInlineFrame->GetPrevInFlow(),
-  //            "Only the first inline continuation can have absolute kids!");
-
   const nsRect cbRect = ComputeInlineAbsoluteCBRect(aInlineFrame);
   const WritingMode cbwm = aInlineFrame->GetWritingMode();
-
   const nsSize thisBlockSize = aReflowOutput.PhysicalSize();
+
   nscoord availBSize = aReflowInput.AvailableSize()
                            .ConvertTo(cbwm, GetWritingMode())
                            .BSize(cbwm);

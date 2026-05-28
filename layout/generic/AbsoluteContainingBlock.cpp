@@ -143,6 +143,20 @@ static LogicalSize* GetUnfragmentedSize(const ReflowInput& aCBReflowInput,
              : aFrame->FirstInFlow()->GetProperty(UnfragmentedSizeProperty());
 }
 
+// Returns the nearest ancestor that represents a fragmentainer content area: a
+// -moz-column-content block in multicol, or an nsPageContentFrame in print.
+// Used to align an inline-CB next-in-flow with the column/page boundary
+// (the inline's parent block is the fragmentainer, not the inline itself).
+static const nsIFrame* GetNearestFragmentainerAncestor(const nsIFrame* aFrame) {
+  for (const nsIFrame* f = aFrame->GetParent(); f; f = f->GetParent()) {
+    if (f->Style()->GetPseudoType() == PseudoStyleType::MozColumnContent ||
+        f->IsPageContentFrame()) {
+      return f;
+    }
+  }
+  return nullptr;
+}
+
 // Walks aInlineFrame's prev-in-flow chain and returns the *first* continuation
 // (in flow order) of the previous fragmentainer relative to aInlineFrame.
 // Returns nullptr if no continuation in a different fragmentainer exists.
@@ -660,6 +674,9 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
   MOZ_ASSERT(aReflowStatus.IsEmpty(),
              "Caller should pass a fresh reflow status!");
 
+  printf("In AbsoluteContainingBlock::Reflow(), aContainingBlock %s\n",
+         ToString(aContainingBlock).c_str());
+
   const auto scrollableContainingBlock = ComputeScrollableContainingBlock(
       aDelegatingFrame, aContainingBlock, aOverflowAreas);
   const ContainingBlockRects passedContainingBlock{aContainingBlock,
@@ -693,7 +710,15 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
   SanityCheckChildListsBeforeReflow(aDelegatingFrame);
 #endif
 
-  if (nsIFrame* prevInFlow = aDelegatingFrame->GetPrevInFlow()) {
+  // For inline CBs, the immediate prev-in-flow may be an intra-fragmentainer
+  // continuation whose absCB never ran Reflow (its
+  // mCumulativeContainingBlockBSize is still 0). Walk back to the previous
+  // fragmentainer's first continuation instead, where Reflow actually ran.
+  const nsIFrame* prevInFlow =
+      aDelegatingFrame->IsInlineFrame()
+          ? GetPrevInlineContinuationInDifferentFragmentainer(aDelegatingFrame)
+          : aDelegatingFrame->GetPrevInFlow();
+  if (prevInFlow) {
     const auto* prevAbsCB = prevInFlow->GetAbsoluteContainingBlock();
     MOZ_ASSERT(prevAbsCB,
                "If this delegating frame has an absCB, its prev-in-flow must "
@@ -1897,8 +1922,38 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
       } else {
         // aKidFrame is a next-in-flow. Place it at the block-edge start of its
         // containing block, with the same inline-position as its prev-in-flow.
-        kidPos = LogicalPoint(
-            outerWM, kidPrevInFlow->IStart(outerWM, cbBorderBoxSize), 0);
+        nscoord nextInFlowIStart =
+            kidPrevInFlow->IStart(outerWM, cbBorderBoxSize);
+        nscoord nextInFlowBStart = 0;
+        if (aDelegatingFrame->IsInlineFrame()) {
+          // For inline CBs the fragmentainer is the enclosing column-content
+          // block (multicol) or page-content frame (print), not the inline
+          // itself. Each inline continuation may sit at a different I/B
+          // offset within its fragmentainer (e.g., col-1 inline starts after
+          // preceding line content while col-2 inline starts at the column
+          // edge). Adjust the next-in-flow's position so the fragment appears
+          // at the same offset from the fragmentainer in each column/page,
+          // matching block-CB behavior and other browsers' output.
+          //
+          // Note: this uses physical x/y, which match outerWM's I/B axes for
+          // horizontal-tb, vertical-rl, and vertical-lr. Sideways modes would
+          // need the fragmentainer's container size for axis flipping which
+          // is stale during reflow.
+          const nsIFrame* prevInline = kidPrevInFlow->GetParent();
+          const nsIFrame* prevFragmentainer =
+              GetNearestFragmentainerAncestor(prevInline);
+          const nsIFrame* curFragmentainer =
+              GetNearestFragmentainerAncestor(aDelegatingFrame);
+          if (prevFragmentainer && curFragmentainer) {
+            const nsPoint prevOffset =
+                prevInline->GetOffsetTo(prevFragmentainer);
+            const nsPoint curOffset =
+                aDelegatingFrame->GetOffsetTo(curFragmentainer);
+            nextInFlowIStart += prevOffset.x - curOffset.x;
+            nextInFlowBStart = -curOffset.y;
+          }
+        }
+        kidPos = LogicalPoint(outerWM, nextInFlowIStart, nextInFlowBStart);
       }
       const LogicalSize kidSize = kidDesiredSize.Size(outerWM);
       const LogicalRect kidRect(outerWM, kidPos, kidSize);
