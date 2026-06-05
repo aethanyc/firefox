@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<title>CSS Positioned Test: Test the inline containing block rectangle for a fragmented inline element in printing</title>
+<link rel="author" title="Ting-Yu Lin" href="mailto:tlin@mozilla.com">
+<link rel="author" title="Mozilla" href="https://www.mozilla.org/">
+<link rel="help" href="https://drafts.csswg.org/css-position-3/#absolute-cb">
+<link rel="match" href="position-absolute-in-inline-011-ref.html">
+<link rel="stylesheet" href="/fonts/ahem.css">
+
+<style>
+@page { size: 5in 3in; margin: 0.5in; }
+
+body {
+  margin: 0;
+}
+.container {
+  font: 0.5in/1 Ahem;
+}
+.rel {
+  position: relative;
+}
+.cb-rect {
+  position: absolute;
+  inset: 0;
+  background: green;
+}
+</style>
+
+<div class="container">
+  XX
+  <span class="rel">
+    <div class="cb-rect"></div>
+    XXXX<br>
+    XXXXXXXX<br>
+    XXXXX<br>
+    XXXXXXXX<br>
+    XXXXX<br>
+    XXXXX
+  </span>
+</div>
