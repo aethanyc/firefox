@@ -287,7 +287,7 @@ bool AbsoluteContainingBlock::PrepareAbsoluteFrames(
   DrainPushedChildList(aDelegatingFrame);
 
   // Steal absolute frame's first-in-flow from the child list of our
-  // continuation chain that appear as the first fragment in each fragmentainer.
+  // continuations that appear as the first continuation in each fragmentainer.
   for (const nsIFrame* next =
            GetFirstContinuationInNextFragmentainer(aDelegatingFrame);
        next; next = GetFirstContinuationInNextFragmentainer(next)) {
@@ -722,11 +722,11 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
   SanityCheckChildListsBeforeReflow(aDelegatingFrame);
 #endif
 
-  if (const nsIFrame* prevInFlow =
+  if (const nsIFrame* prev =
           GetFirstContinuationInPrevFragmentainer(aDelegatingFrame)) {
-    const auto* prevAbsCB = prevInFlow->GetAbsoluteContainingBlock();
+    const auto* prevAbsCB = prev->GetAbsoluteContainingBlock();
     MOZ_ASSERT(prevAbsCB,
-               "If this delegating frame has an absCB, its prev-in-flow must "
+               "If this delegating frame has an absCB, |prev| must "
                "have one, too!");
     mCumulativeContainingBlockBSize =
         prevAbsCB->mCumulativeContainingBlockBSize;
