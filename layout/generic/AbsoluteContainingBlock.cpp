@@ -819,9 +819,14 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
           if (aDelegatingFrame->IsInlineFrameOrSubclass()) {
             // For an inline CB, store the unfragmented position in its parent
             // block's coordinate space, which is consistent and continuous
-            // across columns/pages.
-            unfragPos += aDelegatingFrame->GetLogicalPosition(containerWM,
-                                                              cbBorderBoxSize);
+            // across columns/pages. Use aDelegatingFrame's corner position (no
+            // XMost-based size term), with the block frame's size (stashed in
+            // the reflow input's containing block size) as the container. This
+            // matches the translate-back in ReflowAbsoluteFrame, so the round-
+            // trip cancels exactly.
+            unfragPos += LogicalPoint(
+                containerWM, aDelegatingFrame->GetPosition(),
+                aReflowInput.mContainingBlockSize.GetPhysicalSize(containerWM));
           }
           kidFrame->SetOrUpdateDeletableProperty(UnfragmentedPositionProperty(),
                                                  unfragPos);
@@ -1929,6 +1934,12 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
       const LogicalSize unmodifiedCBSize(outerWM, maybeFragmentedCbSize);
       const nsSize cbBorderBoxSize =
           (unmodifiedCBSize + border.Size(outerWM)).GetPhysicalSize(outerWM);
+      // The block frame's size, stashed in the inline reflow input's containing
+      // block size. Used to translate inline-CB positions between the block's
+      // and aDelegatingFrame's coordinate spaces (the block frame's own size is
+      // not yet set at this point).
+      const nsSize blockSize = aReflowInput.mContainingBlockSize.GetPhysicalSize(
+          aReflowInput.GetWritingMode());
       LogicalPoint kidPos(outerWM);
       if (unfragmentedPosition) {
         MOZ_ASSERT(!kidPrevInFlow, "aKidFrame should be a first-in-flow!");
@@ -1943,13 +1954,15 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
         // matching its prev-in-flow.
         nscoord iStart = kidPrevInFlow->IStart(outerWM, cbBorderBoxSize);
         if (aDelegatingFrame->IsInlineFrameOrSubclass()) {
-          // iStart is relative to kidPrevInFlow's parent. Translate it into the
-          // coordinate space of that parent's parent block, so that when we
-          // later translate it back into aDelegatingFrame's coordinate space,
-          // the kid is at the same inline position within each column/page.
-          iStart += kidPrevInFlow->GetParent()
-                        ->GetLogicalPosition(outerWM, cbBorderBoxSize)
-                        .I(outerWM);
+          // Compute the kid's inline position within its column block from
+          // *physical* corner positions (kidPrevInFlow's plus its parent
+          // inline's), so there is no XMost-based size-leak from the inline
+          // fragments' differing widths. We translate it back into
+          // aDelegatingFrame's space below, so the kid ends at the same inline
+          // position within each column/page.
+          const nsPoint kidPosInColumn = kidPrevInFlow->GetPosition() +
+                                         kidPrevInFlow->GetParent()->GetPosition();
+          iStart = LogicalPoint(outerWM, kidPosInColumn, blockSize).I(outerWM);
         }
         kidPos = LogicalPoint(outerWM, iStart, 0);
       }
@@ -1957,9 +1970,10 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
         // For an inline CB, kidPos is currently in the coordinate space of
         // aDelegatingFrame's parent block (see the comment where we set the
         // UnfragmentedPositionProperty). SetRect() expects a position relative
-        // to the kid's parent, i.e. aDelegatingFrame, so translate it back.
-        kidPos -=
-            aDelegatingFrame->GetLogicalPosition(outerWM, cbBorderBoxSize);
+        // to the kid's parent, i.e. aDelegatingFrame, so translate it back. Use
+        // aDelegatingFrame's corner position (no XMost-based size term) so the
+        // inline's own width does not leak into the result.
+        kidPos -= LogicalPoint(outerWM, aDelegatingFrame->GetPosition(), blockSize);
       }
       const LogicalSize kidSize = kidDesiredSize.Size(outerWM);
       const LogicalRect kidRect(outerWM, kidPos, kidSize);
