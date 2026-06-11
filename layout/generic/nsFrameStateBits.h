@@ -580,6 +580,17 @@ FRAME_STATE_BIT(Block, 61, NS_BLOCK_INTRINSICS_INFLATED)
 // bit is not set. This bit is set on the first continuation only.
 FRAME_STATE_BIT(Block, 62, NS_BLOCK_HAS_FIRST_LETTER_CHILD)
 
+// NS_BLOCK_HAS_INLINE_ABSPOS_DESCENDANT is an optimization hint indicating that
+// this block needs to reflow abspos descendants that have an inline containing
+// block.
+//
+// This bit is set in nsInlineFrame::Reflow() (or in its derived class's
+// Reflow()), and reset by
+// nsBlockFrame::ReflowAbsoluteDescendantsInInlineFrame() after it walks all the
+// block's inline descendants and finds no such abspos descendant, so it may
+// stay set for one extra reflow after the last one is gone.
+FRAME_STATE_BIT(Block, 63, NS_BLOCK_HAS_INLINE_ABSPOS_DESCENDANT)
+
 // == Frame state bits that apply to image frames =============================
 
 FRAME_STATE_GROUP(Image, nsImageFrame)
