@@ -4382,6 +4382,13 @@ void nsIFrame::BuildDisplayListForChild(nsDisplayListBuilder* aBuilder,
       return;
     }
 
+    // If an abspos child whose containing block is an inline, always build its
+    // display item in its nearest block ancestor, so skip it here.
+    if (StaticPrefs::layout_abspos_fragment_aware_inline_cb_enabled() &&
+        parent->IsInlineFrameOrSubclass() && child->IsAbsolutelyPositioned()) {
+      return;
+    }
+
     MOZ_ASSERT(child->HasAnyStateBits(NS_FRAME_OUT_OF_FLOW));
     savedOutOfFlowData = nsDisplayListBuilder::GetOutOfFlowData(child);
 
