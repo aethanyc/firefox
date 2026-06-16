@@ -7973,6 +7973,27 @@ static void DisplayLine(nsDisplayListBuilder* aBuilder,
   collection.MoveTo(aLists);
 }
 
+// Walk aFrame's inline descendants and, for each inline that is an absolute
+// containing block, build the display items for its abspos children.
+static void DisplayAbsoluteDescendantsInInlineFrame(
+    nsDisplayListBuilder* aBuilder, nsIFrame* aBlock, nsIFrame* aFrame,
+    const nsDisplayListSet& aLists) {
+  if (aFrame->IsBlockFrameOrSubclass()) {
+    // Block frames (e.g. 'inline-block') manage their own abspos descendants.
+    return;
+  }
+
+  for (nsIFrame* kid : aFrame->PrincipalChildList()) {
+    DisplayAbsoluteDescendantsInInlineFrame(aBuilder, aBlock, kid, aLists);
+  }
+
+  for (nsIFrame* kid : aFrame->GetChildList(FrameChildListID::Absolute)) {
+    if (kid->GetPrevContinuation()) {
+      aBlock->BuildDisplayListForChild(aBuilder, kid, aLists);
+    }
+  }
+}
+
 void nsBlockFrame::BuildDisplayList(nsDisplayListBuilder* aBuilder,
                                     const nsDisplayListSet& aLists) {
   int32_t drawnLines;  // Will only be used if set (gLamePaintMetrics).
@@ -8189,6 +8210,12 @@ void nsBlockFrame::BuildDisplayList(nsDisplayListBuilder* aBuilder,
     }
 
     if (GetPrevInFlow() || GetNextInFlow()) {
+      if (HasAnyStateBits(NS_BLOCK_HAS_INLINE_ABSPOS_DESCENDANT)) {
+        for (nsIFrame* kid : PrincipalChildList()) {
+          DisplayAbsoluteDescendantsInInlineFrame(aBuilder, this, kid, aLists);
+        }
+      }
+
       DisplayAbsoluteFramesNotBuiltByPlaceholder(aBuilder, aLists);
     }
 
