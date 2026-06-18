@@ -160,8 +160,13 @@ static nsIFrame* GetFirstInlineContinuationInPrevFragmentainer(
       nsLayoutUtils::FindNearestBlockAncestor(aInlineFrame);
   nsIFrame* candidate = nullptr;
   const nsBlockFrame* candidateBlock = nullptr;
-  for (nsIFrame* prev = aInlineFrame->GetPrevContinuation(); prev;
-       prev = prev->GetPrevContinuation()) {
+  for (nsIFrame* prev =
+           nsLayoutUtils::GetPrevContinuationOrIBSplitSibling(aInlineFrame);
+       prev; prev = nsLayoutUtils::GetPrevContinuationOrIBSplitSibling(prev)) {
+    if (prev->IsBlockFrameOrSubclass()) {
+      // Skip IB-split block siblings.
+      continue;
+    }
     const nsBlockFrame* prevBlock =
         nsLayoutUtils::FindNearestBlockAncestor(prev);
     if (prevBlock == myBlock) {
@@ -190,8 +195,13 @@ static nsIFrame* GetFirstInlineContinuationInNextFragmentainer(
   MOZ_ASSERT(aInlineFrame->IsInlineFrameOrSubclass());
   const nsBlockFrame* myBlock =
       nsLayoutUtils::FindNearestBlockAncestor(aInlineFrame);
-  for (nsIFrame* next = aInlineFrame->GetNextContinuation(); next;
-       next = next->GetNextContinuation()) {
+  for (nsIFrame* next =
+           nsLayoutUtils::GetNextContinuationOrIBSplitSibling(aInlineFrame);
+       next; next = nsLayoutUtils::GetNextContinuationOrIBSplitSibling(next)) {
+    if (next->IsBlockFrameOrSubclass()) {
+      // Skip IB-split block siblings.
+      continue;
+    }
     if (nsLayoutUtils::FindNearestBlockAncestor(next) != myBlock) {
       return next;
     }

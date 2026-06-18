@@ -1495,11 +1495,18 @@ Maybe<OverflowAreas> nsBlockFrame::ReflowAbsoluteFramesInInlineFrame(
       aReflowInput.AvailableSize().ConvertTo(cbwm, GetWritingMode());
 
   if (availSize.BSize(cbwm) != NS_UNCONSTRAINEDSIZE &&
-      IsInlineFrameCompleteInCurrentFragmentainer(this, aInlineFrame)) {
-    // This block frame holds the inline CB's last fragment. We use an
-    // unconstrained block-size to workaround an architectural limitation that
-    // inline frames have no overflow container to hold overflowing abspos kids.
-    // As such, kids may overflow the fragmentainer if they are too tall.
+      (HasColumnSpanSiblings() ||
+       IsInlineFrameCompleteInCurrentFragmentainer(this, aInlineFrame))) {
+    // FIXME: Disallow splitting abspos kids by setting the available block-size
+    // to an unconstrained size, as a workaround for the following scenarios:
+    //
+    // 1. This block frame has a column-span sibling, since we haven't support
+    // abspos kids fragmentation across column-span boundary.
+    //
+    // 2. This block frame holds the inline CB's last fragment, and we have an
+    // architectural limitation that inline frames have no overflow container to
+    // hold overflowing abspos kids. As such, kids may overflow the
+    // fragmentainer if they are too tall.
     availSize.BSize(cbwm) = NS_UNCONSTRAINEDSIZE;
   }
   ReflowInput inlineRI(aPresContext, aReflowInput, aInlineFrame, availSize,
