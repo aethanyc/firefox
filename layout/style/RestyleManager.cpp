@@ -1116,6 +1116,15 @@ static bool ContainingBlockChangeAffectsDescendants(
 
   for (const auto& childList : aFrame->ChildLists()) {
     for (nsIFrame* f : childList.mList) {
+      // The frame we should recurse into to look for further descendants.
+      // Normally that's just |f| itself, but if |f| is a placeholder, |f|
+      // has no children of its own, so we need to recurse into the
+      // out-of-flow frame instead to find placeholders nested inside it
+      // (e.g. a fixed-pos frame inside a float; the float's out-of-flow
+      // frame may live outside of aFrame's own child lists entirely, such
+      // as when aFrame is an inline frame and the float bubbled up to an
+      // ancestor block's float list).
+      nsIFrame* frameToRecurseInto = f;
       if (f->IsPlaceholderFrame()) {
         nsIFrame* outOfFlow = nsPlaceholderFrame::GetRealFrameForPlaceholder(f);
         // If SVG text frames could appear here, they could confuse us since
@@ -1150,6 +1159,7 @@ static bool ContainingBlockChangeAffectsDescendants(
             }
           }
         }
+        frameToRecurseInto = outOfFlow;
       }
       // NOTE:  It's tempting to check f->IsAbsPosContainingBlock() or
       // f->IsFixedPosContainingBlock() here.  However, that would only
@@ -1160,8 +1170,8 @@ static bool ContainingBlockChangeAffectsDescendants(
       // cont->MarkAsNotAbsoluteContainingBlock() before we've reframed
       // the descendant and taken it off the absolute list.
       if (ContainingBlockChangeAffectsDescendants(
-              aPossiblyChangingContainingBlock, f, aIsAbsPosContainingBlock,
-              aIsFixedPosContainingBlock)) {
+              aPossiblyChangingContainingBlock, frameToRecurseInto,
+              aIsAbsPosContainingBlock, aIsFixedPosContainingBlock)) {
         return true;
       }
     }
