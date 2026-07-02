@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<link rel="help" href="https://bugzilla.mozilla.org/show_bug.cgi?id=2052336">
+<style>
+content {
+  filter: hue-rotate(90deg);
+  margin-top: auto
+}
+*:scope, #a {
+  position: fixed;
+}
+</style>
+}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  document.styleSheets[0].deleteRule(0)
+})
+</script>
+<iframe></iframe>
+<content>
+<table align="left">
+<tbody id="a"></tbody>
+</table>

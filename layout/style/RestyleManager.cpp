@@ -1116,9 +1116,10 @@ static bool ContainingBlockChangeAffectsDescendants(
   MOZ_ASSERT_IF(aIsFixedPosContainingBlock, aIsAbsPosContainingBlock);
 
   for (const auto& childList : aFrame->ChildLists()) {
+    FrameChildListID listID = childList.mID;
     for (nsIFrame* f : childList.mList) {
-      if (f->IsPlaceholderFrame()) {
-        nsIFrame* outOfFlow = nsPlaceholderFrame::GetRealFrameForPlaceholder(f);
+      if (f->IsPlaceholderFrame() || listID == FrameChildListID::Absolute) {
+        nsIFrame* outOfFlow = nsPlaceholderFrame::GetRealFrameFor(f);
         // If SVG text frames could appear here, they could confuse us since
         // they ignore their position style ... but they can't.
         NS_ASSERTION(!outOfFlow->IsInSVGTextSubtree(),
