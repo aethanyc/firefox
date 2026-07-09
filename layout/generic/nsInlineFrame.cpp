@@ -7,6 +7,7 @@
 #include "nsInlineFrame.h"
 
 #include "gfxContext.h"
+#include "mozilla/AbsoluteContainingBlock.h"
 #include "mozilla/ComputedStyle.h"
 #include "mozilla/Likely.h"
 #include "mozilla/PresShell.h"
@@ -382,6 +383,14 @@ void nsInlineFrame::Reflow(nsPresContext* aPresContext,
     // using only the first inline fragment's rect.
     ReflowAbsoluteFrames(aPresContext, aReflowOutput, aReflowInput, aStatus);
   } else {
+    if (aStatus.IsFullyComplete()) {
+      // When we become fully-complete, pull any absolute children's
+      // first-in-flows back into our absolute child list. Otherwise, our parent
+      // can destroy our next-in-flows and those absolute children in them.
+      if (AbsoluteContainingBlock* absCB = GetAbsoluteContainingBlock()) {
+        absCB->PrepareAbsoluteFrames(this);
+      }
+    }
     MarkBlockAncestorHavingAbsoluteDescendants(aReflowInput);
   }
 

@@ -7,6 +7,7 @@
 #include "nsRubyFrame.h"
 
 #include "RubyUtils.h"
+#include "mozilla/AbsoluteContainingBlock.h"
 #include "mozilla/ComputedStyle.h"
 #include "mozilla/Maybe.h"
 #include "mozilla/PresShell.h"
@@ -176,6 +177,14 @@ void nsRubyFrame::Reflow(nsPresContext* aPresContext,
     // using only the first ruby fragment's rect.
     ReflowAbsoluteFrames(aPresContext, aDesiredSize, aReflowInput, aStatus);
   } else {
+    if (aStatus.IsFullyComplete()) {
+      // When we become fully-complete, pull any absolute children's
+      // first-in-flows back into our absolute child list. Otherwise, our parent
+      // can destroy our next-in-flows and those absolute children in them.
+      if (AbsoluteContainingBlock* absCB = GetAbsoluteContainingBlock()) {
+        absCB->PrepareAbsoluteFrames(this);
+      }
+    }
     MarkBlockAncestorHavingAbsoluteDescendants(aReflowInput);
   }
 }
