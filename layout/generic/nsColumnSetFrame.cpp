@@ -666,7 +666,8 @@ nsColumnSetFrame::ColumnBalanceData nsColumnSetFrame::ReflowColumns(
 
       // We need to reflow any float placeholders, even if our column block-size
       // hasn't changed.
-      kidReflowInput.mFlags.mMustReflowPlaceholders = !changingBSize;
+      kidReflowInput.mFlags.mMustReflowPlaceholders =
+          !changingBSize || reflowLastColumnWithUnconstrainedAvailBSize;
 
       COLUMN_SET_LOG(
           "%s: Reflowing child #%d %p: availSize=(%d,%d), kidCBSize=(%d,%d), "
