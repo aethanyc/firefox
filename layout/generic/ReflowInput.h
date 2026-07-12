@@ -490,9 +490,10 @@ struct ReflowInput : public SizeComputationInput {
     // a "fake" reflow input made in order to be the parent of a real one
     bool mDummyParentReflowInput : 1;
 
-    // Should this frame reflow its place-holder children? If the available
-    // height of this frame didn't change, but its in a paginated environment
-    // (e.g. columns), it should always reflow its placeholder children.
+    // Should this frame reflow its placeholder children? If the available
+    // block-size of this frame didn't change, but its in a paginated
+    // environment (e.g. columns), it should always reflow its placeholder
+    // children.
     bool mMustReflowPlaceholders : 1;
 
     // the STATIC_POS_IS_CB_ORIGIN ctor flag
