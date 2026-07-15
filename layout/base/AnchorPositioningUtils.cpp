@@ -499,6 +499,57 @@ static const nsIFrame* GetAnchorOf(const nsIFrame* aPositioned,
   return presShell->GetAnchorPosAnchor(aAnchorName, aPositioned);
 }
 
+// Maps aLocalBorderBox (the anchor's border box, in the anchor's own coordinate
+// space) into aAncestor's coordinate space, applying the CSS transforms of the
+// anchor and every frame up to (but not including) aAncestor, while IGNORING
+// scroll offsets (scroll is compensated for separately). Returns the
+// axis-aligned bounding box. aAncestor must be a proper ancestor of the
+// single-fragment aAnchor.
+static nsRect TransformAnchorRectToAncestor(const nsIFrame* aAnchor,
+                                            const nsRect& aLocalBorderBox,
+                                            const nsIFrame* aAncestor) {
+  MOZ_ASSERT(nsLayoutUtils::IsProperAncestorFrameConsideringContinuations(
+      aAncestor, aAnchor));
+
+  // Fast path: with no transform between the anchor and the ancestor, the
+  // mapping is a plain scroll-ignoring translation. Use the exact integer
+  // offset so untransformed anchors are unchanged bit-for-bit (keeping the
+  // reflow-time path and the out-of-reflow poll in agreement; see bug 1993692).
+  const bool anyTransform = [&] {
+    for (const nsIFrame* f = aAnchor; f && f != aAncestor; f = f->GetParent()) {
+      if (f->IsTransformed()) {
+        return true;
+      }
+    }
+    return false;
+  }();
+  if (!anyTransform) {
+    return aLocalBorderBox + aAnchor->GetOffsetToIgnoringScrolling(aAncestor);
+  }
+
+  // Accumulate the anchor->ancestor transform as in
+  // nsLayoutUtils::GetTransformToAncestor, but translate by each frame's
+  // scroll-ignoring position instead of GetPosition() so scroll stays out.
+  const int32_t auPerDevPixel = aAnchor->PresContext()->AppUnitsPerDevPixel();
+  gfx::Matrix4x4 ctm;
+  for (const nsIFrame* f = aAnchor; f && f != aAncestor; f = f->GetParent()) {
+    gfx::Matrix4x4 m;
+    if (f->IsTransformed()) {
+      m = nsDisplayTransform::GetResultingTransformMatrix(
+          f, nsPoint(), auPerDevPixel, nsDisplayTransform::INCLUDE_PERSPECTIVE);
+    }
+    const nsPoint delta = f->GetPositionIgnoringScrolling();
+    m.PostTranslate(NSAppUnitsToFloatPixels(delta.x, auPerDevPixel),
+                    NSAppUnitsToFloatPixels(delta.y, auPerDevPixel), 0.0f);
+    ctm = ctm * m;
+    if (!f->Combines3DTransformWithAncestors()) {
+      ctm.ProjectTo2D();
+    }
+  }
+  return nsLayoutUtils::MatrixTransformRect(aLocalBorderBox, ctm,
+                                            auPerDevPixel);
+}
+
 Maybe<nsRect> AnchorPositioningUtils::GetAnchorPosRect(
     const nsIFrame* aAbsoluteContainingBlock, const nsIFrame* aAnchor,
     bool aCBRectIsValid) {
@@ -514,9 +565,17 @@ Maybe<nsRect> AnchorPositioningUtils::GetAnchorPosRect(
             aAbsoluteContainingBlock, aAnchor)) {
       return Nothing{};
     }
-    return Some(
-        nsLayoutUtils::GetCombinedFragmentRects(aAnchor).mRect +
-        aAnchor->GetOffsetToIgnoringScrolling(aAbsoluteContainingBlock));
+    const nsRect localBorderBox =
+        nsLayoutUtils::GetCombinedFragmentRects(aAnchor).mRect;
+    if (aAnchor->GetPrevContinuation() || aAnchor->GetNextContinuation()) {
+      // Fragmented anchor: transform-aware reassembly is deferred, so keep the
+      // untransformed mapping to stay consistent with the multi-fragment branch
+      // of ReassembleAnchorRect.
+      return Some(localBorderBox + aAnchor->GetOffsetToIgnoringScrolling(
+                                       aAbsoluteContainingBlock));
+    }
+    return Some(TransformAnchorRectToAncestor(aAnchor, localBorderBox,
+                                              aAbsoluteContainingBlock));
   }();
   return rect.map([&](const nsRect& aRect) {
     // We need to position the border box of the anchor within the abspos
@@ -647,8 +706,18 @@ Maybe<nsSize> AnchorPositioningUtils::ResolveAnchorPosSize(
   if (!anchor) {
     return Nothing{};
   }
+  // Use the anchor's transformed bounding-box size, matching GetAnchorPosRect
+  // (which shares this cached size). Fragmented anchors, and anchors that are
+  // not a descendant of the containing block, keep the untransformed size (the
+  // fragmented transform case is deferred).
+  const nsRect localBorderBox =
+      nsLayoutUtils::GetCombinedFragmentRects(anchor).mRect;
+  const nsIFrame* cb = aPositioned->GetParent();
   const auto size =
-      nsLayoutUtils::GetCombinedFragmentRects(anchor).mRect.Size();
+      (!anchor->GetPrevContinuation() && !anchor->GetNextContinuation() &&
+       nsLayoutUtils::IsProperAncestorFrameConsideringContinuations(cb, anchor))
+          ? TransformAnchorRectToAncestor(anchor, localBorderBox, cb).Size()
+          : localBorderBox.Size();
   if (entry) {
     *entry =
         Some(AnchorPosResolutionData{size, Nothing{}, aAnchorName.mTreeScope});
@@ -1344,8 +1413,12 @@ nsRect AnchorPositioningUtils::ReassembleAnchorRect(
        !fragRect.mSkippedNextContinuation) ||
       matchingCB->IsInlineOutside()) {
     // fragRect.mRect is in matching containing block's coordinate space.
-    // Translate the rect back to aContainingBlock's coordinate space.
-    return fragRect.mRect +
+    // Map the anchor's single-fragment border box through its transform into
+    // matchingCB's space, then translate back to aContainingBlock's space
+    // (continuations carry no transform between fragments).
+    return TransformAnchorRectToAncestor(
+               aAnchor, nsLayoutUtils::GetCombinedFragmentRects(aAnchor).mRect,
+               matchingCB) +
            matchingCB->GetOffsetToIgnoringScrolling(aContainingBlock);
   }
   // Ok, we need to reassemble the unfragmented size and position of the anchor,
