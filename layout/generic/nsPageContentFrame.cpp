@@ -90,7 +90,13 @@ void nsPageContentFrame::Reflow(nsPresContext* aPresContext,
     // scrollable overflow, since the purpose of shrink to fit is to
     // make the content that ought to be reachable (represented by the
     // scrollable overflow) fit in the page.
-    if (frame->HasOverflowAreas()) {
+    //
+    // Skip the shrink-to-fit computation during a measuring reflow. That reflow
+    // uses an unconstrained block-size, so the content isn't fragmented and its
+    // overflow reflects the entire unfragmented document, yielding a bogus
+    // shrink-to-fit ratio.
+    if (!aReflowInput.mFlags.mIsInFragmentainerMeasuringReflow &&
+        frame->HasOverflowAreas()) {
       // The background covers the content area and padding area, so check
       // for children sticking outside the child frame's padding edge
       nscoord xmost = kidReflowOutput.ScrollableOverflow().XMost();
