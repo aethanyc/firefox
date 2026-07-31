@@ -213,8 +213,9 @@ void nsSplittableFrame::RemoveFromFlow(nsIFrame* aFrame) {
 
 void nsSplittableFrame::UpdateFirstContinuationAndFirstInFlowCache() {
   nsIFrame* oldCachedFirstContinuation = mFirstContinuation;
-  if (nsIFrame* prevContinuation = GetPrevContinuation()) {
-    nsIFrame* newFirstContinuation = prevContinuation->FirstContinuation();
+  if (auto* prevContinuation =
+          static_cast<nsSplittableFrame*>(GetPrevContinuation())) {
+    nsIFrame* newFirstContinuation = prevContinuation->mFirstContinuation;
     if (oldCachedFirstContinuation != newFirstContinuation) {
       // Update the first-continuation cache for us and our next-continuations.
       for (nsSplittableFrame* f = this; f;
@@ -236,11 +237,17 @@ void nsSplittableFrame::UpdateFirstContinuationAndFirstInFlowCache() {
       }
     }
     mFirstContinuation = this;
+
+    DebugOnly<nsSplittableFrame*> nextContinuation =
+        static_cast<nsSplittableFrame*>(GetNextContinuation());
+    MOZ_ASSERT(!nextContinuation || !nextContinuation->mFirstContinuation ||
+                   nextContinuation->mFirstContinuation == this,
+               "Our next-continuation caches a stale first-continuation!");
   }
 
   nsIFrame* oldCachedFirstInFlow = mFirstInFlow;
-  if (nsIFrame* prevInFlow = GetPrevInFlow()) {
-    nsIFrame* newFirstInFlow = prevInFlow->FirstInFlow();
+  if (auto* prevInFlow = static_cast<nsSplittableFrame*>(GetPrevInFlow())) {
+    nsIFrame* newFirstInFlow = prevInFlow->mFirstInFlow;
     if (oldCachedFirstInFlow != newFirstInFlow) {
       // Update the first-in-flow cache for us and our next-in-flows.
       for (nsSplittableFrame* f = this; f;
