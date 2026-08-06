@@ -457,10 +457,19 @@ struct AnchorPositioningUtils {
    *
    * @param aFrame The target frame whose combined fragments are wanted.
    * @param aContainingBlock If provided, union fragments only up to its
-   * fragmentation boundary.
+   * fragmentation boundary. Must be the continuation that is a proper ancestor
+   * of aFrame - see GetMatchingContainingBlock().
+   * @param aApplyTransform Whether to map each fragment through the CSS
+   * transforms between it and aContainingBlock, which requires
+   * aContainingBlock. Each fragment is mapped separately because a fragmented
+   * box is transformed per fragment, about each fragment's own reference box.
+   * ApplyTransform::No keeps the plain scroll-ignoring translation that
+   * ReassembleAnchorRect's stacking relies on.
    */
+  enum class ApplyTransform : bool { No, Yes };
   static CombinedFragments GetCombinedFragmentRects(
-      const nsIFrame* aFrame, const nsIFrame* aContainingBlock = nullptr);
+      const nsIFrame* aFrame, const nsIFrame* aContainingBlock,
+      ApplyTransform aApplyTransform);
 
   // Helper to get shadow root for a property's tree scope
   static const dom::ShadowRoot* GetShadowRootForTreeScope(

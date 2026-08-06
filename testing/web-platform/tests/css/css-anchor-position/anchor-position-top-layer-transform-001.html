@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<title>CSS Anchor Positioning: anchor() resolves against the transformed anchor rect for a top-layer positioned element</title>
+<link rel="help" href="https://drafts.csswg.org/css-anchor-position-1/#determining">
+<link rel="author" title="Ting-Yu Lin" href="mailto:tlin@mozilla.com">
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+
+<style>
+  body { margin: 0; }
+
+  #cb {
+    position: relative;
+  }
+
+  /* The transform sits between the anchor and both positioned elements'
+     containing blocks, so it must be reflected in the resolved anchor rect. */
+  #wrapper {
+    position: absolute;
+    left: 100px;
+    top: 100px;
+    transform: translate(50px, 30px);
+  }
+
+  #anchor {
+    anchor-name: --a;
+    width: 60px;
+    height: 40px;
+  }
+
+  /* Control: containing block is #cb, i.e. not in the top layer. */
+  #control {
+    position: absolute;
+    left: anchor(--a right);
+    top: anchor(--a bottom);
+    width: 20px;
+    height: 20px;
+  }
+
+  /* Containing block is the initial containing block, but NOT in the top layer.
+     Isolates the far-containing-block coordinate space from top-layer effects. */
+  #fixed {
+    position: fixed;
+    left: anchor(--a right);
+    top: anchor(--a bottom);
+    width: 20px;
+    height: 20px;
+  }
+
+  /* Top layer: containing block is the initial containing block. Override the
+     popover UA styles so the insets come purely from anchor(). */
+  #pop {
+    position: fixed;
+    left: anchor(--a right);
+    top: anchor(--a bottom);
+    right: auto;
+    bottom: auto;
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    border: 0;
+    padding: 0;
+    overflow: visible;
+  }
+
+  /* --- scale: sensitive to transform-origin, unlike translate --- */
+
+  #cb2 {
+    position: relative;
+  }
+
+  /* No transform-origin declared, so it is the default 50% 50% of the 60x40
+     border box, i.e. (30, 20). A wrong reference box gives a wrong answer here,
+     which a pure translate could never reveal. */
+  #wrapper2 {
+    position: absolute;
+    left: 100px;
+    top: 300px;
+    width: 60px;
+    height: 40px;
+    transform: scale(2);
+  }
+
+  #anchor2 {
+    anchor-name: --b;
+    width: 60px;
+    height: 40px;
+  }
+
+  #control2 {
+    position: absolute;
+    left: anchor(--b right);
+    top: anchor(--b bottom);
+    width: anchor-size(--b width);
+    height: 20px;
+  }
+
+  #pop2 {
+    position: fixed;
+    left: anchor(--b right);
+    top: anchor(--b bottom);
+    right: auto;
+    bottom: auto;
+    width: anchor-size(--b width);
+    height: 20px;
+    margin: 0;
+    border: 0;
+    padding: 0;
+    overflow: visible;
+  }
+</style>
+
+<div id="cb">
+  <div id="wrapper">
+    <div id="anchor"></div>
+  </div>
+  <div id="control"></div>
+</div>
+<div id="fixed"></div>
+<!-- popover=manual so the two popovers do not dismiss one another. -->
+<div id="pop" popover="manual"></div>
+
+<div id="cb2">
+  <div id="wrapper2">
+    <div id="anchor2"></div>
+  </div>
+  <div id="control2"></div>
+</div>
+<div id="pop2" popover="manual"></div>
+
+<script>
+// #wrapper's border box is at (100, 100); translate(50px, 30px) moves it to
+// (150, 130). #anchor fills its top-left corner at 60x40, so the transformed
+// anchor border box is (150, 130) to (210, 170).
+const EXPECTED_LEFT = 210;  // transformed anchor's right edge
+const EXPECTED_TOP = 170;   // transformed anchor's bottom edge
+
+// Without transform awareness these would resolve to 160 and 140.
+
+test(() => {
+  const rect = document.getElementById('control').getBoundingClientRect();
+  assert_equals(rect.left, EXPECTED_LEFT,
+                'left resolves to the transformed anchor\'s right edge');
+  assert_equals(rect.top, EXPECTED_TOP,
+                'top resolves to the transformed anchor\'s bottom edge');
+}, 'anchor() uses the transformed anchor rect (control: not in the top layer)');
+
+test(() => {
+  const rect = document.getElementById('fixed').getBoundingClientRect();
+  assert_equals(rect.left, EXPECTED_LEFT,
+                'left resolves to the transformed anchor\'s right edge');
+  assert_equals(rect.top, EXPECTED_TOP,
+                'top resolves to the transformed anchor\'s bottom edge');
+}, 'anchor() uses the transformed anchor rect when the containing block is the ICB');
+
+promise_test(async t => {
+  const pop = document.getElementById('pop');
+  t.add_cleanup(() => pop.hidePopover());
+  pop.showPopover();
+  await new Promise(resolve => requestAnimationFrame(resolve));
+
+  const rect = pop.getBoundingClientRect();
+  assert_equals(rect.left, EXPECTED_LEFT,
+                'left resolves to the transformed anchor\'s right edge');
+  assert_equals(rect.top, EXPECTED_TOP,
+                'top resolves to the transformed anchor\'s bottom edge');
+}, 'anchor() uses the transformed anchor rect for a top-layer positioned element');
+
+// #wrapper2's border box is at (100, 300), 60x40, with the default
+// transform-origin of 50% 50% = (30, 20). scale(2) about that origin maps the
+// local x range [0, 60] to [-30, 90] and y range [0, 40] to [-20, 60], so the
+// transformed anchor border box is (70, 280) to (190, 360), sized 120x80.
+const SCALE_EXPECTED_LEFT = 190;   // transformed right edge
+const SCALE_EXPECTED_TOP = 360;    // transformed bottom edge
+const SCALE_EXPECTED_WIDTH = 120;  // transformed width
+
+test(() => {
+  const rect = document.getElementById('control2').getBoundingClientRect();
+  assert_equals(rect.left, SCALE_EXPECTED_LEFT,
+                'left resolves to the scaled anchor\'s right edge');
+  assert_equals(rect.top, SCALE_EXPECTED_TOP,
+                'top resolves to the scaled anchor\'s bottom edge');
+  assert_equals(rect.width, SCALE_EXPECTED_WIDTH,
+                'anchor-size() reports the scaled width');
+}, 'anchor()/anchor-size() honor transform-origin under scale (normal containing block)');
+
+promise_test(async t => {
+  const pop2 = document.getElementById('pop2');
+  t.add_cleanup(() => pop2.hidePopover());
+  pop2.showPopover();
+  await new Promise(resolve => requestAnimationFrame(resolve));
+
+  const rect = pop2.getBoundingClientRect();
+  assert_equals(rect.left, SCALE_EXPECTED_LEFT,
+                'left resolves to the scaled anchor\'s right edge');
+  assert_equals(rect.top, SCALE_EXPECTED_TOP,
+                'top resolves to the scaled anchor\'s bottom edge');
+  assert_equals(rect.width, SCALE_EXPECTED_WIDTH,
+                'anchor-size() reports the scaled width');
+}, 'anchor()/anchor-size() honor transform-origin under scale (top layer)');
+</script>
