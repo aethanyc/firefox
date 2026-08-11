@@ -5069,9 +5069,9 @@ already_AddRefed<DOMMatrixReadOnly> Element::GetTransformToAncestor(
     // If aAncestor is not actually an ancestor of this (including nullptr),
     // then the call to GetTransformToAncestor will return the transform
     // all the way up through the parent chain.
-    transform = nsLayoutUtils::GetTransformToAncestor(RelativeTo{primaryFrame},
-                                                      RelativeTo{ancestorFrame},
-                                                      nsIFrame::IN_CSS_UNITS)
+    transform = nsLayoutUtils::GetTransformToAncestor(
+                    RelativeTo{primaryFrame}, RelativeTo{ancestorFrame},
+                    TransformMatrixFlag::InCSSUnits)
                     .GetMatrix();
   }
 
@@ -5086,9 +5086,9 @@ already_AddRefed<DOMMatrixReadOnly> Element::GetTransformToParent() {
   Matrix4x4 transform;
   if (primaryFrame) {
     nsIFrame* parentFrame = primaryFrame->GetParent();
-    transform = nsLayoutUtils::GetTransformToAncestor(RelativeTo{primaryFrame},
-                                                      RelativeTo{parentFrame},
-                                                      nsIFrame::IN_CSS_UNITS)
+    transform = nsLayoutUtils::GetTransformToAncestor(
+                    RelativeTo{primaryFrame}, RelativeTo{parentFrame},
+                    TransformMatrixFlag::InCSSUnits)
                     .GetMatrix();
   }
 
@@ -5105,7 +5105,7 @@ already_AddRefed<DOMMatrixReadOnly> Element::GetTransformToViewport() {
         nsLayoutUtils::GetTransformToAncestor(
             RelativeTo{primaryFrame},
             RelativeTo{nsLayoutUtils::GetDisplayRootFrame(primaryFrame)},
-            nsIFrame::IN_CSS_UNITS)
+            TransformMatrixFlag::InCSSUnits)
             .GetMatrix();
   }
 
