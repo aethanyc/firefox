@@ -8200,10 +8200,9 @@ nsIWidget* nsIFrame::GetNearestWidget(nsPoint& aOffset) const {
   return PresContext()->GetRootWidget();
 }
 
-Matrix4x4Flagged nsIFrame::GetTransformMatrix(ViewportType aViewportType,
-                                              RelativeTo aStopAtAncestor,
-                                              nsIFrame** aOutAncestor,
-                                              uint32_t aFlags) const {
+Matrix4x4Flagged nsIFrame::GetTransformMatrix(
+    ViewportType aViewportType, RelativeTo aStopAtAncestor,
+    nsIFrame** aOutAncestor, TransformMatrixFlags aFlags) const {
   MOZ_ASSERT(aOutAncestor, "Need a place to put the ancestor!");
 
   /* If we're transformed, we want to hand back the combination
@@ -8222,9 +8221,9 @@ Matrix4x4Flagged nsIFrame::GetTransformMatrix(ViewportType aViewportType,
   if (isTransformed || zoomedContentRoot) {
     MOZ_ASSERT(GetParent());
     Matrix4x4Flagged result;
-    int32_t scaleFactor =
-        ((aFlags & IN_CSS_UNITS) ? AppUnitsPerCSSPixel()
-                                 : PresContext()->AppUnitsPerDevPixel());
+    int32_t scaleFactor = aFlags.contains(TransformMatrixFlag::InCSSUnits)
+                              ? AppUnitsPerCSSPixel()
+                              : PresContext()->AppUnitsPerDevPixel();
 
     /* Compute the delta to the parent, which we need because we are converting
      * coordinates to our parent.
@@ -8247,7 +8246,7 @@ Matrix4x4Flagged nsIFrame::GetTransformMatrix(ViewportType aViewportType,
 
     if (zoomedContentRoot) {
       Matrix4x4Flagged layoutToVisual;
-      if (aFlags & nsIFrame::IN_CSS_UNITS) {
+      if (aFlags.contains(TransformMatrixFlag::InCSSUnits)) {
         layoutToVisual = ViewportUtils::GetVisualToLayoutTransform(
                              zoomedContentRoot->GetContent())
                              .Inverse()
@@ -8287,11 +8286,12 @@ Matrix4x4Flagged nsIFrame::GetTransformMatrix(ViewportType aViewportType,
   /* Keep iterating while the frame can't possibly be transformed. */
   const nsIFrame* current = this;
   auto shouldStopAt = [](const nsIFrame* aCurrent, RelativeTo& aStopAtAncestor,
-                         nsIFrame* aOutAncestor, uint32_t aFlags) {
+                         nsIFrame* aOutAncestor, TransformMatrixFlags aFlags) {
     return aOutAncestor->IsTransformed() ||
            ((aStopAtAncestor.mViewportType == ViewportType::Visual) &&
             ViewportUtils::IsZoomedContentRoot(aOutAncestor)) ||
-           ((aFlags & STOP_AT_STACKING_CONTEXT_AND_DISPLAY_PORT) &&
+           (aFlags.contains(
+                TransformMatrixFlag::StopAtStackingContextAndDisplayPort) &&
             (aOutAncestor->IsStackingContext() ||
              DisplayPortUtils::FrameHasDisplayPort(aOutAncestor, aCurrent)));
   };
@@ -8341,9 +8341,9 @@ Matrix4x4Flagged nsIFrame::GetTransformMatrix(ViewportType aViewportType,
 
   NS_ASSERTION(*aOutAncestor, "Somehow ended up with a null ancestor...?");
 
-  int32_t scaleFactor =
-      ((aFlags & IN_CSS_UNITS) ? AppUnitsPerCSSPixel()
-                               : PresContext()->AppUnitsPerDevPixel());
+  int32_t scaleFactor = aFlags.contains(TransformMatrixFlag::InCSSUnits)
+                            ? AppUnitsPerCSSPixel()
+                            : PresContext()->AppUnitsPerDevPixel();
   return Matrix4x4Flagged::Translation2d(
       NSAppUnitsToFloatPixels(offset.x, scaleFactor),
       NSAppUnitsToFloatPixels(offset.y, scaleFactor));
