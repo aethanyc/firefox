@@ -1214,8 +1214,15 @@ static bool ComputePositionVisibility(
       if (defaultAnchor &&
           defaultAnchor->GetParent()->FirstInFlow() != containingBlock) {
         auto* intersectionRoot = containingBlock;
+        // An inline containing block that is IB-split spreads its boxes over
+        // sibling frames, so the first one is not an ancestor of the anchor,
+        // and intersecting against it would always fail. Use the block holding
+        // the whole split as the root, keeping the split's boxes as the rect.
+        if (containingBlock->HasAnyStateBits(NS_FRAME_PART_OF_IBSPLIT)) {
+          intersectionRoot = containingBlock->GetParent();
+        }
         nsRect rootRect = nsLayoutUtils::GetAllInFlowRectsUnion(
-            intersectionRoot, containingBlock,
+            containingBlock, intersectionRoot,
             nsLayoutUtils::GetAllInFlowRectsFlag::UseInkOverflowAsBox);
         if (IsScrolled(intersectionRoot)) {
           intersectionRoot = intersectionRoot->GetParent();
