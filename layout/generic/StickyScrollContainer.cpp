@@ -259,7 +259,17 @@ StickyScrollContainer::StickyLimits StickyScrollContainer::ComputeStickyLimits(
 }
 
 nsPoint StickyScrollContainer::ComputePosition(nsIFrame* aFrame) const {
-  const auto [stick, contain] = ComputeStickyLimits(aFrame);
+  return DoComputePosition(aFrame, StickyLimitSpace::RelativeToCurrentScroll);
+}
+
+nsPoint StickyScrollContainer::ComputePositionIgnoringScrolling(
+    nsIFrame* aFrame) const {
+  return DoComputePosition(aFrame, StickyLimitSpace::IgnoreCurrentScroll);
+}
+
+nsPoint StickyScrollContainer::DoComputePosition(
+    nsIFrame* aFrame, StickyLimitSpace aSpace) const {
+  const auto [stick, contain] = ComputeStickyLimits(aFrame, aSpace);
 
   nsPoint position = aFrame->GetNormalPosition();
 

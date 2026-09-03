@@ -61,6 +61,12 @@ class StickyScrollContainer final {
   nsPoint ComputePosition(nsIFrame* aFrame) const;
 
   /**
+   * Same as above, but as if our scroll position were zero, so that the result
+   * is independent of the current scroll position.
+   */
+  nsPoint ComputePositionIgnoringScrolling(nsIFrame* aFrame) const;
+
+  /**
    * Compute where a frame should not scroll with the page, represented by the
    * difference of two rectangles.
    */
@@ -170,6 +176,8 @@ class StickyScrollContainer final {
   StickyLimits ComputeStickyLimits(
       nsIFrame* aFrame, StickyLimitSpace aSpace =
                             StickyLimitSpace::RelativeToCurrentScroll) const;
+
+  nsPoint DoComputePosition(nsIFrame* aFrame, StickyLimitSpace aSpace) const;
 
   ScrollContainerFrame* const mScrollContainerFrame;
   DepthOrderedFrameList mFrames;
