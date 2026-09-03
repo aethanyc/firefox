@@ -8779,6 +8779,19 @@ nsRect nsIFrame::GetBoundingClientRect() {
 }
 
 nsPoint nsIFrame::GetPositionIgnoringScrolling() const {
+  if (IsStickyPositioned()) {
+    if (auto* ssc = StickyScrollContainer::GetForFrame(this)) {
+      // Sticky positioning translates the frame away from its normal position
+      // by an amount that depends on the scroll position. Here we compute that
+      // translation as if nothing were scrolled. Only the first continuation or
+      // IB-split sibling is sticky positioned, and the others are translated by
+      // the same amount. See StickyScrollContainer::PositionContinuations().
+      nsIFrame* first = nsLayoutUtils::FirstContinuationOrIBSplitSibling(this);
+      const nsPoint translation = ssc->ComputePositionIgnoringScrolling(first) -
+                                  first->GetNormalPosition();
+      return GetNormalPosition() + translation;
+    }
+  }
   return GetParent() ? GetParent()->GetPositionOfChildIgnoringScrolling(this)
                      : GetPosition();
 }
