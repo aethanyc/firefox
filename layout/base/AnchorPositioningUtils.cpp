@@ -783,42 +783,21 @@ nsPoint AnchorPositioningUtils::GetScrollOffsetFor(
     PhysicalAxes aAxes, const nsIFrame* aPositioned,
     const AnchorPosDefaultAnchorCache& aDefaultAnchorCache) {
   MOZ_ASSERT(aPositioned);
-  if (!aDefaultAnchorCache.mAnchor || aAxes.isEmpty()) {
+  const nsIFrame* anchor = aDefaultAnchorCache.mAnchor;
+  if (!anchor || aAxes.isEmpty()) {
     return nsPoint{};
   }
-  nsPoint offset;
-  const bool trackHorizontal = aAxes.contains(PhysicalAxis::Horizontal);
-  const bool trackVertical = aAxes.contains(PhysicalAxis::Vertical);
 
-  // The anchor and aPositioned may be under different continuations or IB-split
-  // siblings of the absolute containing block. Compare the first continuation
-  // on each side so that the walk below stops correctly instead of running past
-  // the containing block and accumulating scroll containers above it.
-  const auto* absoluteContainingBlock =
-      nsLayoutUtils::FirstContinuationOrIBSplitSibling(
-          aPositioned->GetParent());
-  if (GetNearestScrollFrame(aPositioned).mScrollContainer ==
-      aDefaultAnchorCache.mScrollContainer) {
-    // Would scroll together anyway, skip.
-    return nsPoint{};
-  }
-  // Grab the accumulated offset up to, but not including, the abspos
-  // container.
-  for (const auto* f = aDefaultAnchorCache.mScrollContainer;
-       f && nsLayoutUtils::FirstContinuationOrIBSplitSibling(f) !=
-                absoluteContainingBlock;
-       f = f->GetParent()) {
-    if (const ScrollContainerFrame* scrollFrame = do_QueryFrame(f)) {
-      const auto o = scrollFrame->GetScrollPosition();
-      if (trackHorizontal) {
-        offset.x += o.x;
-      }
-      if (trackVertical) {
-        offset.y += o.y;
-      }
-    }
-  }
-  return offset;
+  // aPositioned was placed against the anchor's scroll-ignored position, so the
+  // scroll offset is how far the anchor has since scrolled relative to the
+  // absolute containing block.
+  const auto* absoluteContainingBlock = aPositioned->GetParent();
+  const nsPoint offset =
+      anchor->GetOffsetToIgnoringScrolling(absoluteContainingBlock) -
+      anchor->GetOffsetTo(absoluteContainingBlock);
+
+  return nsPoint(aAxes.contains(PhysicalAxis::Horizontal) ? offset.x : 0,
+                 aAxes.contains(PhysicalAxis::Vertical) ? offset.y : 0);
 }
 
 // Out of line to avoid having to include AnchorPosReferenceData from nsIFrame.h
