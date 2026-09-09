@@ -8110,6 +8110,12 @@ nsPoint nsIFrame::GetOffsetToIgnoringScrolling(const nsIFrame* aOther) const {
                                                                    aOther);
 }
 
+nsPoint nsIFrame::GetOffsetToIgnoringScrollingAndSticky(
+    const nsIFrame* aOther) const {
+  return OffsetCalculator<&nsIFrame::GetPositionIgnoringScrollingAndSticky>(
+      this, aOther);
+}
+
 nsPoint nsIFrame::GetOffsetToCrossDoc(const nsIFrame* aOther) const {
   return GetOffsetToCrossDoc(aOther, PresContext()->AppUnitsPerDevPixel());
 }
@@ -8235,7 +8241,7 @@ Matrix4x4Flagged nsIFrame::GetTransformMatrix(
 
   auto GetPositionMaybeIgnoringScrolling = [aFlags](const nsIFrame* aFrame) {
     return aFlags.contains(TransformMatrixFlag::IgnoreScrolling)
-               ? aFrame->GetPositionIgnoringScrolling()
+               ? aFrame->GetPositionIgnoringScrollingAndSticky()
                : aFrame->GetPosition();
   };
 
@@ -8719,6 +8725,16 @@ nsRect nsIFrame::GetBoundingClientRect() {
 nsPoint nsIFrame::GetPositionIgnoringScrolling() const {
   return GetParent() ? GetParent()->GetPositionOfChildIgnoringScrolling(this)
                      : GetPosition();
+}
+
+nsPoint nsIFrame::GetPositionIgnoringScrollingAndSticky() const {
+  if (IsStickyPositioned()) {
+    if (const auto* ssc = StickyScrollContainer::GetForFrame(this)) {
+      return GetNormalPosition() +
+             ssc->ComputeTranslationIgnoringScrolling(this);
+    }
+  }
+  return GetPositionIgnoringScrolling();
 }
 
 nsRect nsIFrame::GetOverflowRect(OverflowType aType) const {

@@ -1344,7 +1344,20 @@ class nsIFrame : public nsQueryFrame {
     return aChild->GetPosition();
   }
 
+  /**
+   * Return this frame's position relative to its parent. If this frame is the
+   * scrolled frame of a scroll container, return the position as if the scroll
+   * position were zero.
+   */
   nsPoint GetPositionIgnoringScrolling() const;
+
+  /**
+   * Just like GetPositionIgnoringScrolling(). In addition, if this frame is
+   * sticky positioned, return the position as if its scroll container's scroll
+   * position were zero. That is, the returned position doesn't change as its
+   * scroll container scrolls.
+   */
+  nsPoint GetPositionIgnoringScrollingAndSticky() const;
 
 #define NS_DECLARE_FRAME_PROPERTY_WITH_DTOR(prop, type, dtor)              \
   static const mozilla::FramePropertyDescriptor<type>* prop() {            \
@@ -3386,10 +3399,18 @@ class nsIFrame : public nsQueryFrame {
   nsPoint GetOffsetToRootFrame() const;
 
   /**
-   * Just like GetOffsetTo, but treats all scrollframes as scrolled to
-   * their origin.
+   * Just like GetOffsetTo(), but treats all scroll containers as scrolled to
+   * their origin (i.e. scroll offset zero). See GetPositionIgnoringScrolling().
    */
   nsPoint GetOffsetToIgnoringScrolling(const nsIFrame* aOther) const;
+
+  /**
+   * Just like GetOffsetToIgnoringScrolling(), but also treating a sticky
+   * element's offset as if its scroll container's scroll position were zero.
+   * That is, the result does not change regardless of all the scroll positions
+   * between |this| and aOther.
+   */
+  nsPoint GetOffsetToIgnoringScrollingAndSticky(const nsIFrame* aOther) const;
 
   /**
    * Get the offset between the coordinate systems of |this| and aOther
