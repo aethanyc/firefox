@@ -949,9 +949,10 @@ void nsIFrame::HandlePrimaryFrameStyleChange(ComputedStyle* aOldStyle) {
                  (disp->mPosition == StylePositionProperty::Sticky ||
                   oldDisp->mPosition == StylePositionProperty::Sticky))
               : disp->mPosition == StylePositionProperty::Sticky;
-  if (handleStickyChange && !HasAnyStateBits(NS_FRAME_IS_NONDISPLAY)) {
+  if (handleStickyChange &&
+      !HasAnyStateBits(NS_FRAME_IS_NONDISPLAY | NS_FRAME_SVG_LAYOUT)) {
     if (auto* ssc = StickyScrollContainer::GetOrCreateForFrame(this)) {
-      if (disp->mPosition == StylePositionProperty::Sticky) {
+      if (IsStickyPositioned()) {
         ssc->AddFrame(this);
       } else {
         ssc->RemoveFrame(this);
@@ -975,8 +976,8 @@ void nsIFrame::Destroy(DestroyContext& aContext) {
       this, SVGObserverUtils::InvalidationFlag::FrameBeingDestroyed);
 
   const auto* disp = StyleDisplay();
-  if (disp->mPosition == StylePositionProperty::Sticky) {
-    if (auto* ssc = StickyScrollContainer::GetOrCreateForFrame(this)) {
+  if (IsStickyPositioned()) {
+    if (auto* ssc = StickyScrollContainer::GetForFrame(this)) {
       ssc->RemoveFrame(this);
     }
   }
