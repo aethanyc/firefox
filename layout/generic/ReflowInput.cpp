@@ -2186,6 +2186,10 @@ void ReflowInput::InitConstraints(
           // as per CSS2 spec.
           else {
             nscoord computedBSize = cbri->ComputedSize(wm).BSize(wm);
+            MOZ_ASSERT(computedBSize == NS_UNCONSTRAINEDSIZE ||
+                           cbri->mFlags.mTreatBSizeAsIndefinite,
+                       "Bug 1938264: expected the containing block's bsize to "
+                       "be unconstrained unless it is treated as indefinite");
             if (NS_UNCONSTRAINEDSIZE != computedBSize) {
               cbSize.BSize(wm) = computedBSize;
             } else {
