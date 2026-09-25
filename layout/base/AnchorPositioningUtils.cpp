@@ -1162,6 +1162,7 @@ static void UpdateScrollShift(
   if (!aReferenceData.CompensatingForScrollAxes().isEmpty()) {
     aReferenceData.mDefaultScrollShift += scrollShifts.mScrollCompensatedDelta;
   }
+  aReferenceData.mChainedShift += scrollShifts.mChainedDelta;
 #ifdef ACCESSIBILITY
   if (nsAccessibilityService* accService = GetAccService()) {
     accService->NotifyAnchorPositionedScrollUpdate(aPresShell, aPositioned);

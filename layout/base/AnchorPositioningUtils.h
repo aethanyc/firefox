@@ -145,6 +145,7 @@ class AnchorPosReferenceData {
   struct PositionTryBackup {
     mozilla::PhysicalAxes mCompensatingForScroll;
     nsPoint mDefaultScrollShift;
+    nsPoint mChainedShift;
     nsRect mAdjustedContainingBlock;
     SideBits mScrollCompensatedSides;
     nsMargin mInsets;
@@ -179,20 +180,30 @@ class AnchorPosReferenceData {
     return mCompensatingForScroll;
   }
 
+  // The total shift currently applied to the positioned frame's position by
+  // anchor positioning.
+  nsPoint AppliedShift() const { return mDefaultScrollShift + mChainedShift; }
+
   PositionTryBackup TryPositionWithSameDefaultAnchor() {
     auto compensatingForScroll = std::exchange(mCompensatingForScroll, {});
     auto defaultScrollShift = std::exchange(mDefaultScrollShift, {});
+    auto chainedShift = std::exchange(mChainedShift, {});
     auto adjustedContainingBlock = std::exchange(mAdjustedContainingBlock, {});
     auto containingBlockSidesAttachedToAnchor =
         std::exchange(mScrollCompensatedSides, SideBits::eNone);
     auto insets = std::exchange(mInsets, nsMargin{});
-    return {compensatingForScroll, defaultScrollShift, adjustedContainingBlock,
-            containingBlockSidesAttachedToAnchor, insets};
+    return {compensatingForScroll,
+            defaultScrollShift,
+            chainedShift,
+            adjustedContainingBlock,
+            containingBlockSidesAttachedToAnchor,
+            insets};
   }
 
   void UndoTryPositionWithSameDefaultAnchor(PositionTryBackup&& aBackup) {
     mCompensatingForScroll = aBackup.mCompensatingForScroll;
     mDefaultScrollShift = aBackup.mDefaultScrollShift;
+    mChainedShift = aBackup.mChainedShift;
     mAdjustedContainingBlock = aBackup.mAdjustedContainingBlock;
     mScrollCompensatedSides = aBackup.mScrollCompensatedSides;
     mInsets = aBackup.mInsets;
@@ -202,6 +213,12 @@ class AnchorPosReferenceData {
   DistanceToNearestScrollContainer mDistanceToDefaultScrollContainer;
   // https://drafts.csswg.org/css-anchor-position-1/#default-scroll-shift
   nsPoint mDefaultScrollShift;
+  // The accumulated shift inherited from a default anchor that is itself
+  // anchor-positioned and shifted. Tracked separately from
+  // mDefaultScrollShift, which must keep accounting for the scroll
+  // compensation alone, since it is the baseline that turns an absolute
+  // compensation into an increment.
+  nsPoint mChainedShift;
   // Rect of the original containg block.
   nsRect mOriginalContainingBlockRect;
   // Adjusted containing block, by position-area or grid, as per

@@ -2247,6 +2247,9 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
       if (aAnchorPosResolutionCache) {
         aAnchorPosResolutionCache->mReferenceData->mDefaultScrollShift =
             scrollShift;
+        // The rect below is rebuilt from scratch and only has scrollShift
+        // applied, so any chained shift accumulated during scrolling is gone.
+        aAnchorPosResolutionCache->mReferenceData->mChainedShift = nsPoint();
       }
       r -= scrollShift;
       aKidFrame->SetRect(r);
