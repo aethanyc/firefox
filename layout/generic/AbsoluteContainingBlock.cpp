@@ -698,7 +698,7 @@ static ModifiedContainingBlock ComputeContainingBlock(
     if (const auto positionArea = aKidFrame->StylePosition()->mPositionArea;
         !positionArea.IsNone()) {
       return ModifiedContainingBlock{
-          referenceData->mDefaultScrollShift,
+          referenceData->AppliedScrollShift(),
           AnchorPositioningUtils::PhysicalizePositionArea(positionArea,
                                                           aKidFrame),
           referenceData->mOriginalContainingBlockRect,

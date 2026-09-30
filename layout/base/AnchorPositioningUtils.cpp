@@ -977,7 +977,7 @@ bool AnchorPositioningUtils::FitsInContainingBlock(
   MOZ_ASSERT(aPositioned->FirstInFlow()->GetProperty(
                  nsIFrame::AnchorPosReferences()) == &aReferenceData);
 
-  const auto& scrollShift = aReferenceData.mDefaultScrollShift;
+  const nsPoint scrollShift = aReferenceData.AppliedScrollShift();
   const auto scrollCompensatedSides = aReferenceData.mScrollCompensatedSides;
   nsSize checkSize = [&]() {
     const auto& adjustedCB = aReferenceData.mAdjustedContainingBlock;
@@ -1133,7 +1133,7 @@ static ScrollShifts FindScrollCompensatedAnchorShift(
     const auto offset = AnchorPositioningUtils::GetScrollOffsetFor(
         compensatingForScroll, aPositioned,
         AffectedAnchor{defaultAnchor, scrollContainer});
-    return offset - aReferenceData.mDefaultScrollShift;
+    return offset - aReferenceData.AppliedScrollShift();
   }();
   return {scrollCompensatedDelta, chainedDelta};
 }

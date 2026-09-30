@@ -179,6 +179,10 @@ class AnchorPosReferenceData {
     return mCompensatingForScroll;
   }
 
+  // The total scroll shift currently applied to the positioned frame's
+  // position.
+  nsPoint AppliedScrollShift() const { return mDefaultScrollShift; }
+
   PositionTryBackup TryPositionWithSameDefaultAnchor() {
     auto compensatingForScroll = std::exchange(mCompensatingForScroll, {});
     auto defaultScrollShift = std::exchange(mDefaultScrollShift, {});
