@@ -871,11 +871,15 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
         reuseUnfragmentedAnchorPosReferences = true;
       }
       if (!referenceData) {
-        referenceData = kidFrame->SetOrUpdateDeletableProperty(
+        referenceData = kidFrame->GetOrCreateDeletableProperty(
             nsIFrame::AnchorPosReferences());
+        referenceData->Reset();
       }
       anchorPosResolutionCache = Some(PopulateAnchorResolutionCache(
           kidFrame, referenceData, reuseUnfragmentedAnchorPosReferences));
+      // PopulateAnchorResolutionCache() resolves the default anchor, so we can
+      // now tell if the remembered scroll offset is obsolete.
+      referenceData->MaybeForgetRememberedScrollOffset();
     } else {
       kidFrame->RemoveProperty(nsIFrame::AnchorPosReferences());
     }
@@ -2244,8 +2248,10 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
             aAnchorPosResolutionCache->mDefaultAnchorCache);
       }();
       if (aAnchorPosResolutionCache) {
-        aAnchorPosResolutionCache->mReferenceData->mDefaultScrollShift =
-            scrollShift;
+        auto* referenceData = aAnchorPosResolutionCache->mReferenceData;
+        const auto& remembered = referenceData->mRememberedScrollOffset;
+        referenceData->mDefaultScrollShift =
+            remembered ? scrollShift - remembered->mOffset : scrollShift;
       }
       r -= scrollShift;
       aKidFrame->SetRect(r);
