@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>Scroll compensation of an anchored element doesn't change another scroller's scroll range</title>
+<link rel="author" title="Ting-Yu Lin" href="mailto:tlin@mozilla.com">
+<link rel="help" href="https://drafts.csswg.org/css-anchor-position-1/#scroll">
+<link rel="help" href="https://bugzilla.mozilla.org/show_bug.cgi?id=2072683">
+<meta name="assert" content="The default scroll shift of an anchored element is
+    applied after layout, so scrolling its anchor's scroll container must not
+    change the scroll range of the scroll container the anchored element is
+    positioned in.">
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+
+<style>
+body {
+  margin: 0;
+}
+div {
+  width: 100px;
+  height: 100px;
+}
+#scroller1 {
+  width: 200px;
+  height: 200px;
+  position: relative;
+  overflow: scroll;
+}
+#scroller2 {
+  overflow: scroll;
+}
+#anchor {
+  anchor-name: --a;
+  height: 20px;
+  background: orange;
+}
+#anchored {
+  position: absolute;
+  position-anchor: --a;
+  left: anchor(left);
+  top: anchor(bottom);
+  background: green;
+}
+</style>
+
+<div id="scroller1">
+  <div style="height: 100px"></div>
+  <div id="scroller2">
+    <div style="height: 230px"></div>
+    <div id="anchor"></div>
+    <div style="height: 230px"></div>
+  </div>
+  <div style="height: 100px"></div>
+  <div id="anchored"></div>
+</div>
+
+<script>
+const frames = n => new Promise(resolve => {
+  const tick = () => (--n <= 0) ? resolve() : requestAnimationFrame(tick);
+  requestAnimationFrame(tick);
+});
+
+function assertTracksAnchor(description) {
+  const anchorRect = document.getElementById("anchor").getBoundingClientRect();
+  const anchoredRect = document.getElementById("anchored").getBoundingClientRect();
+  assert_approx_equals(anchoredRect.top, anchorRect.bottom, 1,
+                       `#anchored stays at its anchor's bottom ${description}`);
+}
+
+promise_test(async () => {
+  const scroller1 = document.getElementById("scroller1");
+  const scroller2 = document.getElementById("scroller2");
+
+  // The shift is applied off a refresh tick, not synchronously from the
+  // scrollTop setter, so let each scroll settle before measuring. The baseline
+  // is taken after the first scroll rather than before it, since the point at
+  // which the anchored element's layout captures the scroll position may land
+  // on either side of it.
+  await frames(4);
+  scroller2.scrollTop = 50;
+  await frames(2);
+  const expected = scroller1.scrollHeight;
+  assertTracksAnchor("with scroller2 at 50");
+
+  for (const y of [100, 150, 200, 250, 150, 50, 0]) {
+    scroller2.scrollTop = y;
+    await frames(2);
+    assert_equals(scroller1.scrollHeight, expected,
+                  `scroller1.scrollHeight with scroller2 at ${y}`);
+    assertTracksAnchor(`with scroller2 at ${y}`);
+  }
+}, "Scrolling the anchor's scroller doesn't change the anchored element's scroller's scroll range");
+</script>
