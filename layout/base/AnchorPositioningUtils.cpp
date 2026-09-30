@@ -871,6 +871,11 @@ void DeleteAnchorPosReferenceData(AnchorPosReferenceData* aData) {
   delete aData;
 }
 
+void DeleteAnchorPosRememberedScrollOffsetData(
+    AnchorPosRememberedScrollOffsetData* aData) {
+  delete aData;
+}
+
 void DeleteLastSuccessfulPositionData(LastSuccessfulPositionData* aData) {
   delete aData;
 }
@@ -1071,6 +1076,7 @@ using AppliedShifts = nsTHashMap<nsIFrame*, nsPoint>;
 struct ScrollShifts {
   nsPoint mScrollCompensatedDelta;
   nsPoint mChainedDelta;
+  const nsIFrame* mDefaultAnchor = nullptr;
 
   nsPoint Sum() const { return mChainedDelta + mScrollCompensatedDelta; }
 };
@@ -1135,7 +1141,33 @@ static ScrollShifts FindScrollCompensatedAnchorShift(
         AffectedAnchor{defaultAnchor, scrollContainer});
     return offset - aReferenceData.AppliedScrollShift();
   }();
-  return {scrollCompensatedDelta, chainedDelta};
+  return {scrollCompensatedDelta, chainedDelta, defaultAnchor};
+}
+
+// Remember all of the scroll shift applied to aPositioned so far as the
+// remembered scroll offset of aDefaultAnchor.
+static void RememberScrollOffset(nsIFrame* aPositioned,
+                                 const nsIFrame* aDefaultAnchor,
+                                 AnchorPosReferenceData& aReferenceData) {
+  aReferenceData.mRememberedScrollOffset += aReferenceData.mDefaultScrollShift;
+  aReferenceData.mDefaultScrollShift = nsPoint();
+  if (!aDefaultAnchor) {
+    aPositioned->RemoveProperty(nsIFrame::AnchorPosRememberedScrollOffset());
+    return;
+  }
+  aPositioned->SetOrUpdateDeletableProperty(
+      nsIFrame::AnchorPosRememberedScrollOffset(), aDefaultAnchor->GetContent(),
+      aReferenceData.mRememberedScrollOffset);
+}
+
+static void MaybeRememberScrollOffset(nsIFrame* aPositioned,
+                                      const nsIFrame* aDefaultAnchor,
+                                      AnchorPosReferenceData& aReferenceData) {
+  if (!aDefaultAnchor ||
+      aPositioned->HasProperty(nsIFrame::AnchorPosRememberedScrollOffset())) {
+    return;
+  }
+  RememberScrollOffset(aPositioned, aDefaultAnchor, aReferenceData);
 }
 
 // https://drafts.csswg.org/css-anchor-position-1/#default-scroll-shift
@@ -1149,6 +1181,8 @@ static void UpdateScrollShift(
                                        aAppliedShifts, aTopLayerIndexCache);
   auto delta = scrollShifts.Sum();
   if (delta == nsPoint()) {
+    MaybeRememberScrollOffset(aPositioned, scrollShifts.mDefaultAnchor,
+                              aReferenceData);
     return;
   }
   aAppliedShifts.InsertOrUpdate(aPositioned, delta);
@@ -1162,6 +1196,8 @@ static void UpdateScrollShift(
   if (!aReferenceData.CompensatingForScrollAxes().isEmpty()) {
     aReferenceData.mDefaultScrollShift += scrollShifts.mScrollCompensatedDelta;
   }
+  MaybeRememberScrollOffset(aPositioned, scrollShifts.mDefaultAnchor,
+                            aReferenceData);
 #ifdef ACCESSIBILITY
   if (nsAccessibilityService* accService = GetAccService()) {
     accService->NotifyAnchorPositionedScrollUpdate(aPresShell, aPositioned);
@@ -1178,6 +1214,7 @@ static void UpdateScrollShift(
 
 static bool TriggerFallbackReflow(PresShell* aPresShell, nsIFrame* aPositioned,
                                   AnchorPosReferenceData& aReferencedAnchors,
+                                  OverflowChangedTracker& aOct,
                                   bool aEvaluateAllFallbacksIfNeeded) {
   auto totalFallbacks =
       aPositioned->StylePosition()->mPositionTryFallbacks.value._0.Length();
@@ -1206,6 +1243,22 @@ static bool TriggerFallbackReflow(PresShell* aPresShell, nsIFrame* aPositioned,
   if (!needsRetry) {
     // Record our last successful fallback.
     if (lastSuccessfulPosition) {
+      if (lastSuccessfulPosition->mLastIndex !=
+          lastSuccessfulPosition->mRecordedIndex) {
+        // Changing position fallbacks is an anchor recalculation point, so
+        // remember the scroll offset for the new fallback, and update the
+        // parent's overflow areas.
+        const nsIFrame* defaultAnchor =
+            aReferencedAnchors.mDefaultAnchorName
+                ? aPresShell->GetAnchorPosAnchor(
+                      {aReferencedAnchors.mDefaultAnchorName.get(),
+                       aReferencedAnchors.mAnchorTreeScope},
+                      aPositioned, aReferencedAnchors.mFrameTreeDepth)
+                : nullptr;
+        RememberScrollOffset(aPositioned, defaultAnchor, aReferencedAnchors);
+        aOct.AddFrame(aPositioned->GetParent(),
+                      OverflowChangedTracker::CHILDREN_CHANGED);
+      }
       if (lastSuccessfulPosition->mLastIndex) {
         lastSuccessfulPosition->mRecordedIndex =
             lastSuccessfulPosition->mLastIndex;
@@ -1339,7 +1392,7 @@ bool AnchorPositioningUtils::TriggerLayoutOnOverflow(PresShell* aPresShell,
                         appliedShifts, topLayerCache);
     }
 
-    if (TriggerFallbackReflow(aPresShell, positioned, *referencedAnchors,
+    if (TriggerFallbackReflow(aPresShell, positioned, *referencedAnchors, oct,
                               aFirstIteration)) {
       didLayoutPositionedItems = true;
     }

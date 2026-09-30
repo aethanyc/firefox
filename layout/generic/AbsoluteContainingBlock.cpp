@@ -878,6 +878,7 @@ void AbsoluteContainingBlock::Reflow(nsContainerFrame* aDelegatingFrame,
           kidFrame, referenceData, reuseUnfragmentedAnchorPosReferences));
     } else {
       kidFrame->RemoveProperty(nsIFrame::AnchorPosReferences());
+      kidFrame->RemoveProperty(nsIFrame::AnchorPosRememberedScrollOffset());
     }
 
     bool kidNeedsReflow =
@@ -2244,8 +2245,25 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
             aAnchorPosResolutionCache->mDefaultAnchorCache);
       }();
       if (aAnchorPosResolutionCache) {
-        aAnchorPosResolutionCache->mReferenceData->mDefaultScrollShift =
-            scrollShift;
+        auto* referenceData = aAnchorPosResolutionCache->mReferenceData;
+        referenceData->mRememberedScrollOffset = scrollShift;
+        referenceData->mDefaultScrollShift = nsPoint();
+        if (const auto* rememberedOffsetData = aKidFrame->GetProperty(
+                nsIFrame::AnchorPosRememberedScrollOffset())) {
+          const nsIFrame* defaultAnchor =
+              aAnchorPosResolutionCache->mDefaultAnchorCache.mAnchor;
+          if (!defaultAnchor ||
+              defaultAnchor->GetContent() != rememberedOffsetData->mAnchor) {
+            // Clear the property when the default anchor changed.
+            aKidFrame->RemoveProperty(
+                nsIFrame::AnchorPosRememberedScrollOffset());
+          } else {
+            referenceData->mRememberedScrollOffset =
+                rememberedOffsetData->mOffset;
+            referenceData->mDefaultScrollShift =
+                scrollShift - rememberedOffsetData->mOffset;
+          }
+        }
       }
       r -= scrollShift;
       aKidFrame->SetRect(r);

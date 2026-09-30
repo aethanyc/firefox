@@ -10,6 +10,7 @@
 #include "nsRect.h"
 
 class nsAtom;
+class nsIContent;
 class nsIFrame;
 
 template <class T>
@@ -128,9 +129,11 @@ struct AnchorPosResolutionData {
 // * Cached offset/size resolution, if resolution was valid,
 // * Compensating for scroll [1]
 // * Default scroll shift [2]
+// * Remembered scroll offset [3]
 //
 // [1]: https://drafts.csswg.org/css-anchor-position-1/#compensate-for-scroll
 // [2]: https://drafts.csswg.org/css-anchor-position-1/#default-scroll-shift
+// [3]: https://drafts.csswg.org/css-anchor-position-1/#remembered-scroll-offset
 class AnchorPosReferenceData {
  private:
   using ResolutionMap =
@@ -144,6 +147,7 @@ class AnchorPosReferenceData {
   // These entries correspond 1:1 to that of `AnchorPosReferenceData`.
   struct PositionTryBackup {
     mozilla::PhysicalAxes mCompensatingForScroll;
+    nsPoint mRememberedScrollOffset;
     nsPoint mDefaultScrollShift;
     nsRect mAdjustedContainingBlock;
     SideBits mScrollCompensatedSides;
@@ -181,21 +185,29 @@ class AnchorPosReferenceData {
 
   // The total scroll shift currently applied to the positioned frame's
   // position.
-  nsPoint AppliedScrollShift() const { return mDefaultScrollShift; }
+  nsPoint AppliedScrollShift() const {
+    return mRememberedScrollOffset + mDefaultScrollShift;
+  }
 
   PositionTryBackup TryPositionWithSameDefaultAnchor() {
     auto compensatingForScroll = std::exchange(mCompensatingForScroll, {});
+    auto rememberedScrollOffset = std::exchange(mRememberedScrollOffset, {});
     auto defaultScrollShift = std::exchange(mDefaultScrollShift, {});
     auto adjustedContainingBlock = std::exchange(mAdjustedContainingBlock, {});
     auto containingBlockSidesAttachedToAnchor =
         std::exchange(mScrollCompensatedSides, SideBits::eNone);
     auto insets = std::exchange(mInsets, nsMargin{});
-    return {compensatingForScroll, defaultScrollShift, adjustedContainingBlock,
-            containingBlockSidesAttachedToAnchor, insets};
+    return {compensatingForScroll,
+            rememberedScrollOffset,
+            defaultScrollShift,
+            adjustedContainingBlock,
+            containingBlockSidesAttachedToAnchor,
+            insets};
   }
 
   void UndoTryPositionWithSameDefaultAnchor(PositionTryBackup&& aBackup) {
     mCompensatingForScroll = aBackup.mCompensatingForScroll;
+    mRememberedScrollOffset = aBackup.mRememberedScrollOffset;
     mDefaultScrollShift = aBackup.mDefaultScrollShift;
     mAdjustedContainingBlock = aBackup.mAdjustedContainingBlock;
     mScrollCompensatedSides = aBackup.mScrollCompensatedSides;
@@ -204,19 +216,30 @@ class AnchorPosReferenceData {
 
   // Distance from the default anchor to the nearest scroll container.
   DistanceToNearestScrollContainer mDistanceToDefaultScrollContainer;
+
+  // The part of the applied scroll shift that counts as layout. This is copy of
+  // the remembered scroll offset stored in AnchorPosRememberedScrollOffset
+  // frame property, if it exists. Otherwise, it store all the scroll shift at
+  // reflow. See AnchorPosRememberedScrollOffsetData for details.
+  nsPoint mRememberedScrollOffset;
+
+  // The scroll shift on top of mRememberedScrollOffset. It doesn't contribute
+  // to the scrollable overflow.
   // https://drafts.csswg.org/css-anchor-position-1/#default-scroll-shift
   nsPoint mDefaultScrollShift;
+
   // Rect of the original containg block.
   nsRect mOriginalContainingBlockRect;
+
   // Adjusted containing block, by position-area or grid, as per
   // https://drafts.csswg.org/css-position/#original-cb
   // TODO(dshin, bug 2004596): "or" should be "and/or."
   nsRect mAdjustedContainingBlock;
-  // TODO(dshin, bug 1987962): Remembered scroll offset
-  // https://drafts.csswg.org/css-anchor-position-1/#remembered-scroll-offset
+
   // Name of the default used anchor. Not necessarily positioned frame's
   // style, because of fallbacks.
   RefPtr<const nsAtom> mDefaultAnchorName;
+
   // Flag indicating which sides of the containing block attach to the
   // scroll-compensated anchor. Whenever a scroll-compensated anchor scrolls, it
   // effectively moves around w.r.t. its absolute containing block. This
@@ -233,6 +256,7 @@ class AnchorPosReferenceData {
   // those sides by the scroll offset, while pinning the rest of the sides to
   // the original containing block.
   SideBits mScrollCompensatedSides = SideBits::eNone;
+
   // Resolved insets for this positioned element. Modifies the adjusted &
   // scrolled containing block.
   nsMargin mInsets;
@@ -245,6 +269,23 @@ class AnchorPosReferenceData {
   // Axes we need to compensate for scroll [1] in.
   // [1]: https://drafts.csswg.org/css-anchor-position-1/#compensate-for-scroll
   mozilla::PhysicalAxes mCompensatingForScroll;
+};
+
+// The remembered scroll offset of a positioned frame's default anchor. We
+// capture it at the positioned frame's first scroll shift update, which we
+// treat as the anchor recalculation point when the frame starts generating
+// boxes, and when the frame changes position fallbacks.
+// https://drafts.csswg.org/css-anchor-position-1/#remembered-scroll-offset
+//
+// Bug 1987962: Anchor references to other anchors don't have remembered scroll
+// offsets, and resolve as if their scroll containers were at their initial
+// scroll position.
+struct AnchorPosRememberedScrollOffsetData {
+  // The default anchor element this offset was captured for. We store the
+  // pointer to nsIContent rather than nsIFrame so that the remembered scroll
+  // offset is kept even when the anchor gets reframed.
+  RefPtr<const nsIContent> mAnchor;
+  nsPoint mOffset;
 };
 
 struct LastSuccessfulPositionData {

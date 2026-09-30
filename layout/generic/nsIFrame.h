@@ -137,6 +137,7 @@ enum class TableSelectionMode : uint32_t;
 
 class AbsoluteContainingBlock;
 class AnchorPosReferenceData;
+struct AnchorPosRememberedScrollOffsetData;
 struct LastSuccessfulPositionData;
 class EffectSet;
 class LazyLogModule;
@@ -152,6 +153,8 @@ class WidgetGUIEvent;
 class WidgetMouseEvent;
 
 void DeleteAnchorPosReferenceData(AnchorPosReferenceData*);
+void DeleteAnchorPosRememberedScrollOffsetData(
+    AnchorPosRememberedScrollOffsetData*);
 void DeleteLastSuccessfulPositionData(LastSuccessfulPositionData*);
 
 struct PeekOffsetStruct;
@@ -1450,6 +1453,14 @@ class nsIFrame : public nsQueryFrame {
   NS_DECLARE_FRAME_PROPERTY_WITH_DTOR(AnchorPosReferences,
                                       mozilla::AnchorPosReferenceData,
                                       mozilla::DeleteAnchorPosReferenceData);
+
+  // Persistent storage of the remembered scroll offset. This property is needed
+  // to keep the data across reflows until the next anchor recalculation point.
+  // https://drafts.csswg.org/css-anchor-position-1/#remembered-scroll-offset
+  NS_DECLARE_FRAME_PROPERTY_WITH_DTOR(
+      AnchorPosRememberedScrollOffset,
+      mozilla::AnchorPosRememberedScrollOffsetData,
+      mozilla::DeleteAnchorPosRememberedScrollOffsetData);
 
   // The last successful position-try-fallbacks index, if present.
   NS_DECLARE_FRAME_PROPERTY_WITH_DTOR(

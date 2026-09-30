@@ -8837,6 +8837,26 @@ OverflowAreas nsIFrame::GetOverflowAreasRelativeToParent() const {
 
 OverflowAreas nsIFrame::GetActualAndNormalOverflowAreasRelativeToParent()
     const {
+  if (MOZ_UNLIKELY(IsAbsolutelyPositioned())) {
+    const auto* referenceData = GetProperty(AnchorPosReferences());
+    if (!referenceData || referenceData->mDefaultScrollShift == nsPoint()) {
+      return GetOverflowAreasRelativeToParent();
+    }
+    // The default scroll shift is applied after layout, on top of the
+    // remembered scroll offset, as the default anchor scrolls. Including it in
+    // the scrollable overflow would change the scroll range that produced it.
+    // So, like sticky positioned frames below, use the position without the
+    // default scroll shift for both overflow areas, and add the current
+    // position only to the ink overflow. The shift is subtracted from the
+    // frame's position, so adding it back removes it.
+    const nsPoint unshiftedPosition =
+        GetPosition() + referenceData->mDefaultScrollShift;
+    const OverflowAreas overflows = GetOverflowAreas();
+    OverflowAreas result(overflows.InkOverflow() + GetPosition(), nsRect());
+    result.UnionWith(overflows + unshiftedPosition);
+    return result;
+  }
+
   if (MOZ_LIKELY(!IsRelativelyOrStickyPositioned())) {
     return GetOverflowAreasRelativeToParent();
   }
