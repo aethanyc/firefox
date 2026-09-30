@@ -8710,7 +8710,26 @@ OverflowAreas nsIFrame::GetOverflowAreasRelativeToParent() const {
 OverflowAreas nsIFrame::GetActualAndNormalOverflowAreasRelativeToParent()
     const {
   if (MOZ_LIKELY(!IsRelativelyOrStickyPositioned())) {
-    return GetOverflowAreasRelativeToParent();
+    const auto* anchorPosReferences = GetProperty(AnchorPosReferences());
+    const nsPoint scrollShift = anchorPosReferences
+                                    ? anchorPosReferences->mDefaultScrollShift
+                                    : nsPoint();
+    if (scrollShift == nsPoint()) {
+      return GetOverflowAreasRelativeToParent();
+    }
+    // The default scroll shift is applied after layout by scrolling, so letting
+    // it into the scrollable overflow would let it change the scroll range that
+    // produced it. As for sticky positioned frames below, only the ink overflow
+    // uses the shifted position, since that's where we paint.
+    //
+    // The shift is applied by subtracting from the frame's position, so adding
+    // it back recovers where the frame was laid out.
+    const nsPoint layoutPosition = GetPosition() + scrollShift;
+    const OverflowAreas overflows = GetOverflowAreas();
+    OverflowAreas actualAndLayoutOverflows = overflows + layoutPosition;
+    actualAndLayoutOverflows.UnionWith(
+        OverflowAreas(overflows.InkOverflow() + GetPosition(), nsRect()));
+    return actualAndLayoutOverflows;
   }
 
   const OverflowAreas overflows = GetOverflowAreas();

@@ -1138,6 +1138,28 @@ static ScrollShifts FindScrollCompensatedAnchorShift(
   return {scrollCompensatedDelta, chainedDelta};
 }
 
+// On the frame's first scroll shift update, capture the scroll shift applied so
+// far as part of the layout shift, to remember it across reflows. The first
+// update happens before the frame's first paint, so any scroll shift before
+// this moment counts, e.g. scrolling done by a script, or sticky positioning
+// shift at reflow.
+
+// On the frame's first scroll shift update, take all of the scroll shift
+// applied so far as part of the layout, and remember it across reflows. The
+// first update happens before the frame is displayed, so any scrolling it picks
+// up, e.g. done by a script before the first paint, counts as layout, like the
+// shift applied at reflow.
+static void MaybeCaptureLayoutScrollShift(
+    nsIFrame* aPositioned, AnchorPosReferenceData& aReferenceData) {
+  if (aPositioned->HasProperty(nsIFrame::AnchorPosLayoutScrollShift())) {
+    return;
+  }
+  aReferenceData.mLayoutScrollShift += aReferenceData.mDefaultScrollShift;
+  aReferenceData.mDefaultScrollShift = nsPoint();
+  aPositioned->SetProperty(nsIFrame::AnchorPosLayoutScrollShift(),
+                           aReferenceData.mLayoutScrollShift);
+}
+
 // https://drafts.csswg.org/css-anchor-position-1/#default-scroll-shift
 static void UpdateScrollShift(
     PresShell* aPresShell, nsIFrame* aPositioned,
@@ -1149,6 +1171,9 @@ static void UpdateScrollShift(
                                        aAppliedShifts, aTopLayerIndexCache);
   auto delta = scrollShifts.Sum();
   if (delta == nsPoint()) {
+    // Capture even if there is no shift, so that a later scroll isn't
+    // considered as the first update.
+    MaybeCaptureLayoutScrollShift(aPositioned, aReferenceData);
     return;
   }
   aAppliedShifts.InsertOrUpdate(aPositioned, delta);
@@ -1162,6 +1187,7 @@ static void UpdateScrollShift(
   if (!aReferenceData.CompensatingForScrollAxes().isEmpty()) {
     aReferenceData.mDefaultScrollShift += scrollShifts.mScrollCompensatedDelta;
   }
+  MaybeCaptureLayoutScrollShift(aPositioned, aReferenceData);
 #ifdef ACCESSIBILITY
   if (nsAccessibilityService* accService = GetAccService()) {
     accService->NotifyAnchorPositionedScrollUpdate(aPresShell, aPositioned);
@@ -1210,6 +1236,14 @@ static bool TriggerFallbackReflow(PresShell* aPresShell, nsIFrame* aPositioned,
   if (!needsRetry) {
     // Record our last successful fallback.
     if (lastSuccessfulPosition) {
+      // Changing position fallbacks is an anchor recalculation point, so the
+      // layout scroll shift captured for the previous fallback no longer
+      // applies. The next scroll shift update captures a new one.
+      // https://drafts.csswg.org/css-anchor-position-1/#anchor-recalculation-point
+      if (lastSuccessfulPosition->mLastIndex !=
+          lastSuccessfulPosition->mRecordedIndex) {
+        aPositioned->RemoveProperty(nsIFrame::AnchorPosLayoutScrollShift());
+      }
       if (lastSuccessfulPosition->mLastIndex) {
         lastSuccessfulPosition->mRecordedIndex =
             lastSuccessfulPosition->mLastIndex;

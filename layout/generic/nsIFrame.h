@@ -1451,6 +1451,13 @@ class nsIFrame : public nsQueryFrame {
                                       mozilla::AnchorPosReferenceData,
                                       mozilla::DeleteAnchorPosReferenceData);
 
+  // The anchor positioned frame's AnchorPosReferenceData::mLayoutScrollShift,
+  // captured at its first scroll shift update. AnchorPosReferences is reset on
+  // every reflow; this survives reflows, so that scrolling since the first
+  // update isn't taken as part of the layout by a later reflow. Absent until
+  // the first update, and removed when the frame changes position fallbacks.
+  NS_DECLARE_FRAME_PROPERTY_SMALL_VALUE(AnchorPosLayoutScrollShift, nsPoint)
+
   // The last successful position-try-fallbacks index, if present.
   NS_DECLARE_FRAME_PROPERTY_WITH_DTOR(
       LastSuccessfulPositionFallback, mozilla::LastSuccessfulPositionData,

@@ -2244,8 +2244,17 @@ void AbsoluteContainingBlock::ReflowAbsoluteFrame(
             aAnchorPosResolutionCache->mDefaultAnchorCache);
       }();
       if (aAnchorPosResolutionCache) {
-        aAnchorPosResolutionCache->mReferenceData->mDefaultScrollShift =
-            scrollShift;
+        // Until the frame's first scroll shift update, all of scrollShift is
+        // layout. After that, keep the layout part captured then, so that
+        // scrolling since isn't taken as layout by this reflow.
+        auto* referenceData = aAnchorPosResolutionCache->mReferenceData;
+        bool hasLayoutScrollShift = false;
+        const nsPoint layoutScrollShift = aKidFrame->GetProperty(
+            nsIFrame::AnchorPosLayoutScrollShift(), &hasLayoutScrollShift);
+        referenceData->mLayoutScrollShift =
+            hasLayoutScrollShift ? layoutScrollShift : scrollShift;
+        referenceData->mDefaultScrollShift =
+            scrollShift - referenceData->mLayoutScrollShift;
       }
       r -= scrollShift;
       aKidFrame->SetRect(r);
