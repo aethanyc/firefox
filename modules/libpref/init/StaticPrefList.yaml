@@ -10823,7 +10823,7 @@
 # https://drafts.csswg.org/css-anchor-position-1/#determining
 - name: layout.css.anchor-positioning.follows-transforms.enabled
   type: RelaxedAtomicBool
-  value: false
+  value: @IS_NIGHTLY_BUILD@
   mirror: always
   rust: true
 
