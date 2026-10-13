@@ -518,13 +518,10 @@ nsresult AccessibleCaretManager::PressCaret(const nsPoint& aPoint,
              "Unexpected event class!");
 
   using TouchArea = AccessibleCaret::TouchArea;
-  TouchArea touchArea =
-      aEventClass == eMouseEventClass ? TouchArea::CaretImage : TouchArea::Full;
-
-  if (mCarets.GetFirst()->Contains(aPoint, touchArea)) {
+  if (mCarets.GetFirst()->Contains(aPoint, TouchArea::CaretImage)) {
     mActiveCaret = mCarets.GetFirst();
     SetSelectionDirection(eDirPrevious);
-  } else if (mCarets.GetSecond()->Contains(aPoint, touchArea)) {
+  } else if (mCarets.GetSecond()->Contains(aPoint, TouchArea::CaretImage)) {
     mActiveCaret = mCarets.GetSecond();
     SetSelectionDirection(eDirNext);
   }

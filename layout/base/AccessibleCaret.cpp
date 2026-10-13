@@ -171,8 +171,9 @@ bool AccessibleCaret::Contains(const nsPoint& aPoint,
     return caretImageRect.Contains(aPoint);
   }
 
-  MOZ_ASSERT(aTouchArea == TouchArea::Full, "Unexpected TouchArea type!");
-  return textOverlayRect.Contains(aPoint) || caretImageRect.Contains(aPoint);
+  MOZ_ASSERT(aTouchArea == TouchArea::TextOverlay,
+             "Unexpected TouchArea type!");
+  return textOverlayRect.Contains(aPoint);
 }
 
 void AccessibleCaret::EnsureApzAware() {
