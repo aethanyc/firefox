@@ -114,6 +114,7 @@ class AccessibleCaretEventHub : public nsIReflowObserver,
   MOZ_DECL_STATE_CLASS_GETTER(PressCaretState)
   MOZ_DECL_STATE_CLASS_GETTER(DragCaretState)
   MOZ_DECL_STATE_CLASS_GETTER(PressNoCaretState)
+  MOZ_DECL_STATE_CLASS_GETTER(PressTextOverlayState)
   MOZ_DECL_STATE_CLASS_GETTER(ScrollState)
   MOZ_DECL_STATE_CLASS_GETTER(LongTapState)
 

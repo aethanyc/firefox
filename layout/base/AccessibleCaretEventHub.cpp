@@ -56,6 +56,9 @@ class AccessibleCaretEventHub::NoActionState
     if (NS_SUCCEEDED(aContext->mManager->PressCaret(aPoint, aEventClass))) {
       aContext->SetState(AccessibleCaretEventHub::PressCaretState());
       rv = nsEventStatus_eConsumeNoDefault;
+    } else if (aEventClass == eTouchEventClass &&
+               NS_SUCCEEDED(aContext->mManager->PressTextOverlay(aPoint))) {
+      aContext->SetState(AccessibleCaretEventHub::PressTextOverlayState());
     } else {
       aContext->SetState(AccessibleCaretEventHub::PressNoCaretState());
     }
@@ -233,6 +236,56 @@ class AccessibleCaretEventHub::PressNoCaretState
   }
 };
 
+class AccessibleCaretEventHub::PressTextOverlayState
+    : public AccessibleCaretEventHub::PressNoCaretState {
+ public:
+  const char* Name() const override { return "PressTextOverlayState"; }
+
+  MOZ_CAN_RUN_SCRIPT
+  nsEventStatus OnMove(AccessibleCaretEventHub* aContext, const nsPoint& aPoint,
+                       WidgetMouseEvent::Reason aReason) override {
+    if (aReason == WidgetMouseEvent::eReal &&
+        aContext->MoveDistanceIsLarge(aPoint)) {
+      if (NS_SUCCEEDED(aContext->mManager->DragCaret(aPoint))) {
+        aContext->SetState(AccessibleCaretEventHub::DragCaretState());
+      }
+    }
+
+    return nsEventStatus_eConsumeNoDefault;
+  }
+
+  MOZ_CAN_RUN_SCRIPT
+  nsEventStatus OnRelease(AccessibleCaretEventHub* aContext) override {
+    aContext->mManager->ReleaseCaret();
+    aContext->SetState(AccessibleCaretEventHub::NoActionState());
+
+    return nsEventStatus_eIgnore;
+  }
+
+  MOZ_CAN_RUN_SCRIPT
+  nsEventStatus OnLongTap(AccessibleCaretEventHub* aContext,
+                          const nsPoint& aPoint) override {
+    aContext->mManager->ReleaseCaret();
+    return PressNoCaretState::OnLongTap(aContext, aPoint);
+  }
+
+  MOZ_CAN_RUN_SCRIPT
+  void OnScrollStart(AccessibleCaretEventHub* aContext) override {
+    aContext->mManager->ReleaseCaret();
+    PressNoCaretState::OnScrollStart(aContext);
+  }
+
+  MOZ_CAN_RUN_SCRIPT
+  void OnBlur(AccessibleCaretEventHub* aContext,
+              bool aIsLeavingDocument) override {
+    aContext->mManager->ReleaseCaret();
+    aContext->mManager->OnBlur();
+    aContext->SetState(aIsLeavingDocument
+                           ? AccessibleCaretEventHub::NoActionState()
+                           : AccessibleCaretEventHub::PressNoCaretState());
+  }
+};
+
 // -----------------------------------------------------------------------------
 // ScrollState
 //
@@ -322,6 +375,7 @@ MOZ_IMPL_STATE_CLASS_GETTER(NoActionState)
 MOZ_IMPL_STATE_CLASS_GETTER(PressCaretState)
 MOZ_IMPL_STATE_CLASS_GETTER(DragCaretState)
 MOZ_IMPL_STATE_CLASS_GETTER(PressNoCaretState)
+MOZ_IMPL_STATE_CLASS_GETTER(PressTextOverlayState)
 MOZ_IMPL_STATE_CLASS_GETTER(ScrollState)
 MOZ_IMPL_STATE_CLASS_GETTER(LongTapState)
 

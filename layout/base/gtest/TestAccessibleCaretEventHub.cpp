@@ -28,10 +28,13 @@ namespace mozilla {
 
 class MockAccessibleCaretManager : public AccessibleCaretManager {
  public:
-  MockAccessibleCaretManager() : AccessibleCaretManager(nullptr) {}
+  MockAccessibleCaretManager() : AccessibleCaretManager(nullptr) {
+    ON_CALL(*this, PressTextOverlay(_)).WillByDefault(Return(NS_ERROR_FAILURE));
+  }
 
   MOCK_METHOD2(PressCaret,
                nsresult(const nsPoint& aPoint, EventClassID aEventClass));
+  MOCK_METHOD1(PressTextOverlay, nsresult(const nsPoint& aPoint));
   MOCK_METHOD1(DragCaret, nsresult(const nsPoint& aPoint));
   MOCK_METHOD0(ReleaseCaret, nsresult());
   MOCK_METHOD1(TapCaret, nsresult(const nsPoint& aPoint));
@@ -49,6 +52,7 @@ class MockAccessibleCaretEventHub : public AccessibleCaretEventHub {
   using AccessibleCaretEventHub::NoActionState;
   using AccessibleCaretEventHub::PressCaretState;
   using AccessibleCaretEventHub::PressNoCaretState;
+  using AccessibleCaretEventHub::PressTextOverlayState;
   using AccessibleCaretEventHub::ScrollState;
 
   MockAccessibleCaretEventHub() : AccessibleCaretEventHub(nullptr) {
@@ -407,6 +411,172 @@ void AccessibleCaretEventHubTester::TestPressMoveReleaseOnCaret(
   HandleEventAndCheckState(aReleaseEventCreator(x3, y3),
                            MockAccessibleCaretEventHub::NoActionState(),
                            nsEventStatus_eConsumeNoDefault);
+}
+
+TEST_F(AccessibleCaretEventHubTester, TestTouchPressReleaseOnTextOverlay)
+MOZ_CAN_RUN_SCRIPT_FOR_DEFINITION {
+  {
+    InSequence dummy;
+
+    EXPECT_CALL(*mHub->GetMockAccessibleCaretManager(), PressCaret(_, _))
+        .WillOnce(Return(NS_ERROR_FAILURE));
+    EXPECT_CALL(*mHub->GetMockAccessibleCaretManager(), PressTextOverlay(_))
+        .WillOnce(Return(NS_OK));
+    EXPECT_CALL(*mHub->GetMockAccessibleCaretManager(), ReleaseCaret())
+        .WillOnce(Return(NS_OK));
+  }
+
+  EXPECT_CALL(*mHub->GetMockAccessibleCaretManager(), TapCaret(_)).Times(0);
+
+  HandleEventAndCheckState(CreateTouchStartEvent(0, 0),
+                           MockAccessibleCaretEventHub::PressTextOverlayState(),
+                           nsEventStatus_eIgnore);
+
+  HandleEventAndCheckState(CreateTouchEndEvent(0, 0),
+                           MockAccessibleCaretEventHub::NoActionState(),
+                           nsEventStatus_eIgnore);
+}
+
+TEST_F(AccessibleCaretEventHubTester, TestMousePressReleaseOnTextOverlay)
+MOZ_CAN_RUN_SCRIPT_FOR_DEFINITION {
+  EXPECT_CALL(*mHub->GetMockAccessibleCaretManager(), PressCaret(_, _))
+      .WillOnce(Return(NS_ERROR_FAILURE));
+  EXPECT_CALL(*mHub->GetMockAccessibleCaretManager(), PressTextOverlay(_))
+      .Times(0);
+  EXPECT_CALL(*mHub->GetMockAccessibleCaretManager(), ReleaseCaret()).Times(0);
+
+  HandleEventAndCheckState(CreateMousePressEvent(0, 0),
+                           MockAccessibleCaretEventHub::PressNoCaretState(),
+                           nsEventStatus_eIgnore);
+
+  HandleEventAndCheckState(CreateMouseReleaseEvent(0, 0),
+                           MockAccessibleCaretEventHub::NoActionState(),
+                           nsEventStatus_eIgnore);
+}
+
+TEST_F(AccessibleCaretEventHubTester, TestTouchPressMoveReleaseOnTextOverlay)
+MOZ_CAN_RUN_SCRIPT_FOR_DEFINITION {
+  {
+    InSequence dummy;
+
+    EXPECT_CALL(*mHub->GetMockAccessibleCaretManager(), PressCaret(_, _))
+        .WillOnce(Return(NS_ERROR_FAILURE));
+    EXPECT_CALL(*mHub->GetMockAccessibleCaretManager(), PressTextOverlay(_))
+        .WillOnce(Return(NS_OK));
+    EXPECT_CALL(*mHub->GetMockAccessibleCaretManager(), DragCaret(_))
+        .Times(2)
+        .WillRepeatedly(Return(NS_OK));
+    EXPECT_CALL(*mHub->GetMockAccessibleCaretManager(), ReleaseCaret())
+        .WillOnce(Return(NS_OK));
+  }
+
+  HandleEventAndCheckState(CreateTouchStartEvent(0, 0),
+                           MockAccessibleCaretEventHub::PressTextOverlayState(),
+                           nsEventStatus_eIgnore);
+
+  HandleEventAndCheckState(CreateTouchMoveEvent(100, 100),
+                           MockAccessibleCaretEventHub::PressTextOverlayState(),
+                           nsEventStatus_eConsumeNoDefault);
+
+  HandleEventAndCheckState(CreateTouchMoveEvent(300, 300),
+                           MockAccessibleCaretEventHub::DragCaretState(),
+                           nsEventStatus_eConsumeNoDefault);
+
+  HandleEventAndCheckState(CreateTouchMoveEvent(400, 400),
+                           MockAccessibleCaretEventHub::DragCaretState(),
+                           nsEventStatus_eConsumeNoDefault);
+
+  HandleEventAndCheckState(CreateTouchEndEvent(400, 400),
+                           MockAccessibleCaretEventHub::NoActionState(),
+                           nsEventStatus_eConsumeNoDefault);
+}
+
+TEST_F(AccessibleCaretEventHubTester, TestTouchLongTapOnTextOverlay)
+MOZ_CAN_RUN_SCRIPT_FOR_DEFINITION {
+  EXPECT_CALL(*mHub->GetMockAccessibleCaretManager(), PressCaret(_, _))
+      .WillOnce(Return(NS_ERROR_FAILURE));
+  EXPECT_CALL(*mHub->GetMockAccessibleCaretManager(), PressTextOverlay(_))
+      .WillOnce(Return(NS_OK));
+  EXPECT_CALL(*mHub->GetMockAccessibleCaretManager(), SelectWordOrShortcut(_))
+      .WillOnce(Return(NS_OK));
+  EXPECT_CALL(*mHub->GetMockAccessibleCaretManager(), ReleaseCaret())
+      .WillOnce(Return(NS_OK));
+
+  HandleEventAndCheckState(CreateTouchStartEvent(0, 0),
+                           MockAccessibleCaretEventHub::PressTextOverlayState(),
+                           nsEventStatus_eIgnore);
+
+  HandleEventAndCheckState(CreateLongTapEvent(0, 0),
+                           MockAccessibleCaretEventHub::LongTapState(),
+                           nsEventStatus_eIgnore);
+
+  HandleEventAndCheckState(CreateTouchEndEvent(0, 0),
+                           MockAccessibleCaretEventHub::NoActionState(),
+                           nsEventStatus_eIgnore);
+}
+
+TEST_F(AccessibleCaretEventHubTester,
+       TestTouchPressOnTextOverlayThenAsyncPanZoomScroll)
+MOZ_CAN_RUN_SCRIPT_FOR_DEFINITION {
+  EXPECT_CALL(*mHub->GetMockAccessibleCaretManager(), PressCaret(_, _))
+      .WillOnce(Return(NS_ERROR_FAILURE));
+  EXPECT_CALL(*mHub->GetMockAccessibleCaretManager(), PressTextOverlay(_))
+      .WillOnce(Return(NS_OK));
+  EXPECT_CALL(*mHub->GetMockAccessibleCaretManager(), ReleaseCaret())
+      .WillOnce(Return(NS_OK));
+  EXPECT_CALL(*mHub->GetMockAccessibleCaretManager(), OnScrollStart());
+
+  HandleEventAndCheckState(CreateTouchStartEvent(0, 0),
+                           MockAccessibleCaretEventHub::PressTextOverlayState(),
+                           nsEventStatus_eIgnore);
+
+  RefPtr<MockAccessibleCaretEventHub> hub(mHub);
+  hub->AsyncPanZoomStarted();
+  EXPECT_EQ(hub->GetState(), MockAccessibleCaretEventHub::ScrollState());
+}
+
+TEST_F(AccessibleCaretEventHubTester, TestTouchPressOnTextOverlayThenBlur)
+MOZ_CAN_RUN_SCRIPT_FOR_DEFINITION {
+  EXPECT_CALL(*mHub->GetMockAccessibleCaretManager(), PressCaret(_, _))
+      .WillOnce(Return(NS_ERROR_FAILURE));
+  EXPECT_CALL(*mHub->GetMockAccessibleCaretManager(), PressTextOverlay(_))
+      .WillOnce(Return(NS_OK));
+  EXPECT_CALL(*mHub->GetMockAccessibleCaretManager(), ReleaseCaret())
+      .WillOnce(Return(NS_OK));
+  EXPECT_CALL(*mHub->GetMockAccessibleCaretManager(), OnBlur());
+
+  HandleEventAndCheckState(CreateTouchStartEvent(0, 0),
+                           MockAccessibleCaretEventHub::PressTextOverlayState(),
+                           nsEventStatus_eIgnore);
+
+  RefPtr<MockAccessibleCaretEventHub> hub(mHub);
+  hub->NotifyBlur(true);
+  EXPECT_EQ(hub->GetState(), MockAccessibleCaretEventHub::NoActionState());
+}
+
+TEST_F(AccessibleCaretEventHubTester,
+       TestTouchPressOnTextOverlayThenBlurWithoutLeavingDocument)
+MOZ_CAN_RUN_SCRIPT_FOR_DEFINITION {
+  EXPECT_CALL(*mHub->GetMockAccessibleCaretManager(), PressCaret(_, _))
+      .WillOnce(Return(NS_ERROR_FAILURE));
+  EXPECT_CALL(*mHub->GetMockAccessibleCaretManager(), PressTextOverlay(_))
+      .WillOnce(Return(NS_OK));
+  EXPECT_CALL(*mHub->GetMockAccessibleCaretManager(), ReleaseCaret())
+      .WillOnce(Return(NS_OK));
+  EXPECT_CALL(*mHub->GetMockAccessibleCaretManager(), OnBlur());
+  EXPECT_CALL(*mHub->GetMockAccessibleCaretManager(), DragCaret(_)).Times(0);
+
+  HandleEventAndCheckState(CreateTouchStartEvent(0, 0),
+                           MockAccessibleCaretEventHub::PressTextOverlayState(),
+                           nsEventStatus_eIgnore);
+
+  RefPtr<MockAccessibleCaretEventHub> hub(mHub);
+  hub->NotifyBlur(false);
+  EXPECT_EQ(hub->GetState(), MockAccessibleCaretEventHub::PressNoCaretState());
+
+  HandleEventAndCheckState(CreateTouchMoveEvent(300, 300),
+                           MockAccessibleCaretEventHub::NoActionState(),
+                           nsEventStatus_eIgnore);
 }
 
 TEST_F(AccessibleCaretEventHubTester,

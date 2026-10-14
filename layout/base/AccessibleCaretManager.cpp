@@ -537,6 +537,22 @@ nsresult AccessibleCaretManager::PressCaret(const nsPoint& aPoint,
   return rv;
 }
 
+nsresult AccessibleCaretManager::PressTextOverlay(const nsPoint& aPoint) {
+  // Detect pressing on the text overlay in the cursor mode only.
+  if (GetCaretMode() != CaretMode::Cursor ||
+      !mCarets.GetFirst()->Contains(aPoint,
+                                    AccessibleCaret::TouchArea::TextOverlay)) {
+    return NS_ERROR_FAILURE;
+  }
+
+  mActiveCaret = mCarets.GetFirst();
+  SetSelectionDirection(eDirPrevious);
+  mOffsetYToCaretLogicalPosition = mActiveCaret->LogicalPosition().y - aPoint.y;
+  SetSelectionDragState(true);
+  DispatchCaretStateChangedEvent(CaretChangedReason::Presscaret, &aPoint);
+  return NS_OK;
+}
+
 nsresult AccessibleCaretManager::DragCaret(const nsPoint& aPoint) {
   MOZ_ASSERT(mActiveCaret);
   MOZ_ASSERT(GetCaretMode() != CaretMode::None);

@@ -63,6 +63,11 @@ class AccessibleCaretManager {
   MOZ_CAN_RUN_SCRIPT
   virtual nsresult PressCaret(const nsPoint& aPoint, EventClassID aEventClass);
 
+  // Press the text overlay on the given point. Return NS_OK if the point is
+  // actually on the text overlay in the cursor mode.
+  MOZ_CAN_RUN_SCRIPT
+  virtual nsresult PressTextOverlay(const nsPoint& aPoint);
+
   // Drag caret to the given point. It's required to call PressCaret()
   // beforehand.
   MOZ_CAN_RUN_SCRIPT
