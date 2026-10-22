@@ -67,11 +67,11 @@ class ViewportFrame : public nsContainerFrame {
 
   /**
    * Get the containing block rect when ViewportFrame serves as a containing
-   * block. This method accounts for scrollbars, visual viewport, and dynamic
-   * toolbar sizes.
+   * block for aKidFrame. This method accounts for scrollbars, visual viewport,
+   * and dynamic toolbar sizes.
    */
   nsRect GetContainingBlockAdjustedForScrollbars(
-      const ReflowInput& aReflowInput) const;
+      const ReflowInput& aReflowInput, const nsIFrame* aKidFrame) const;
 
   /**
    * Update our style (and recursively the styles of any anonymous boxes we
