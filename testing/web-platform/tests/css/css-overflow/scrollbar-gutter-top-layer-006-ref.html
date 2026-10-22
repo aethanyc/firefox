@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<title>CSS Overflow Reference: Top layer position:absolute modal dialog doesn't cover the root element's scrollbar-gutter</title>
+<link rel="author" title="Ting-Yu Lin" href="mailto:tlin@mozilla.com">
+<link rel="author" title="Mozilla" href="https://www.mozilla.org/">
+<link rel="stylesheet" href="/fonts/ahem.css">
+
+<style>
+:root {
+  scrollbar-gutter: stable both-edges;
+}
+dialog {
+  position: absolute;
+  color: green;
+  font: 50px/1 Ahem;
+  border: none;
+  padding: 0;
+  outline: none;
+}
+</style>
+
+<dialog id="dialog" style="inset: 0 0 auto auto">XX<br>XX</dialog>
+<dialog id="dialog2" style="inset: 0 auto auto 0">XX<br>XX</dialog>
+
+<script>
+/* Use non-modal dialogs */
+dialog.show();
+dialog2.show();
+</script>
