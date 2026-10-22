@@ -352,11 +352,19 @@ nscoord ViewportFrame::IntrinsicISize(const IntrinsicSizeInput& aInput,
 }
 
 nsRect ViewportFrame::GetContainingBlockAdjustedForScrollbars(
-    const ReflowInput& aReflowInput) const {
+    const ReflowInput& aReflowInput, const nsIFrame* aKidFrame) const {
+  MOZ_ASSERT(aReflowInput.mFrame == this,
+             "Caller should pass ViewportFrame's ReflowInput!");
+
   const WritingMode wm = aReflowInput.GetWritingMode();
 
   LogicalSize computedSize = aReflowInput.ComputedSize();
   const nsPoint& origin = [&]() {
+    if (aKidFrame->StyleDisplay()->mTopLayer == StyleTopLayer::Auto) {
+      // Top layer frames are not adjusted for scrollbars because they cover the
+      // scrollbars and scrollbar-gutter.
+      return nsPoint(0, 0);
+    }
     // Get our prinicpal child frame and see if we're scrollable
     nsIFrame* kidFrame = mFrames.FirstChild();
     if (ScrollContainerFrame* scrollContainerFrame = do_QueryFrame(kidFrame)) {
