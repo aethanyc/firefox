@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<title>CSS Overflow Reference: Top layer modal dialog covers the root element's scrollbar-gutter</title>
+<link rel="author" title="Ting-Yu Lin" href="mailto:tlin@mozilla.com">
+<link rel="author" title="Mozilla" href="https://www.mozilla.org/">
+
+<style>
+dialog {
+  inset: 0 0 auto auto;
+  outline: none;
+}
+</style>
+
+<dialog id="dialog">At top-right corner</dialog>
+<script>
+dialog.showModal();
+</script>
