@@ -3742,30 +3742,6 @@ void ScrollContainerFrame::MaybeCreateTopLayerAndWrapRootItems(
       asrSetter.SetCurrentActiveScrolledRoot(nullptr);
       clipState.Clear();
     }
-    if (viewportParent) {
-      bool topLayerIsOpaque = false;
-      if (nsDisplayWrapList* topLayerWrapList =
-              viewportParent->BuildDisplayListForContentTopLayer(
-                  aBuilder, &topLayerIsOpaque)) {
-        // If the top layer content is opaque, and we're the root content
-        // document in the process, we can drop the display items behind it. We
-        // only support doing this for the root content document in the process,
-        // since the top layer content might have fixed position items that have
-        // a scrolltarget referencing the APZ data for the document. APZ builds
-        // this data implicitly for the root content document in the process,
-        // but subdocuments etc need their display items to generate it, so we
-        // can't cull those.
-        if (topLayerIsOpaque && !serializedList &&
-            PresContext()->IsRootContentDocumentInProcess()) {
-          aSet.DeleteAll(aBuilder);
-        }
-        if (serializedList) {
-          rootResultList.AppendToTop(topLayerWrapList);
-        } else {
-          aSet.PositionedDescendants()->AppendToTop(topLayerWrapList);
-        }
-      }
-    }
 
     if (aCapturedByViewTransition) {
       SerializeList();
@@ -3858,6 +3834,48 @@ void ScrollContainerFrame::MaybeCreateTopLayerAndWrapRootItems(
 
   if (serializedList) {
     aSet.Content()->AppendToTop(&rootResultList);
+  }
+}
+
+void ScrollContainerFrame::AppendContentTopLayer(
+    nsDisplayListBuilder* aBuilder, nsDisplayListCollection& aSet,
+    bool aCreateAsyncZoom, const nsRect& aAsyncZoomClipRect) {
+  if (!mIsRoot) {
+    return;
+  }
+  ViewportFrame* viewportParent = do_QueryFrame(GetParent());
+  if (!viewportParent) {
+    return;
+  }
+  nsDisplayListBuilder::AutoCurrentActiveScrolledRootSetter asrSetter(aBuilder);
+  DisplayListClipState::AutoSaveRestore clipState(aBuilder);
+  if (aBuilder->IsInViewTransitionCapture()) {
+    asrSetter.SetCurrentActiveScrolledRoot(nullptr);
+    clipState.Clear();
+  }
+  bool topLayerIsOpaque = false;
+  nsDisplayWrapList* topLayerWrapList =
+      viewportParent->BuildDisplayListForContentTopLayer(aBuilder,
+                                                         &topLayerIsOpaque);
+  if (!topLayerWrapList) {
+    return;
+  }
+  if (!aCreateAsyncZoom) {
+    aSet.PositionedDescendants()->AppendToTop(topLayerWrapList);
+    return;
+  }
+  nsDisplayList list;
+  list.AppendToTop(topLayerWrapList);
+  clipState.ClipContentDescendants(aAsyncZoomClipRect);
+  // Index 1, because MaybeCreateTopLayerAndWrapRootItems() creates the other
+  // async zoom container for this frame.
+  auto* zoomItem = MakeDisplayItemWithIndex<nsDisplayAsyncZoom>(
+      aBuilder, this, 1, &list, aBuilder->CurrentActiveScrolledRoot(),
+      nsDisplayItem::ContainerASRType::Constant,
+      nsLayoutUtils::FindOrCreateIDFor(mScrolledFrame->GetContent()));
+  if (zoomItem) {
+    zoomItem->SetOverrideZIndex(std::numeric_limits<int32_t>::max());
+    aSet.PositionedDescendants()->AppendToTop(zoomItem);
   }
 }
 
@@ -4023,6 +4041,8 @@ void ScrollContainerFrame::BuildDisplayList(nsDisplayListBuilder* aBuilder,
       // Add overlay scrollbars.
       AppendScrollPartsTo(aBuilder, set, createLayersForScrollbars, true);
     }
+    AppendContentTopLayer(aBuilder, set, /* aCreateAsyncZoom = */ false,
+                          nsRect());
 
     set.MoveTo(aLists);
     return;
@@ -4063,6 +4083,9 @@ void ScrollContainerFrame::BuildDisplayList(nsDisplayListBuilder* aBuilder,
   nsRect scrollPortClip =
       effectiveScrollPort + aBuilder->ToReferenceFrame(this);
   nsRect clipRect = scrollPortClip;
+  // The clip for the content top layer, which covers the root scrollbars and
+  // scrollbar-gutter.
+  nsRect topLayerClipRect = scrollPortClip;
   // Our override of GetBorderRadii ensures we never have a radius at
   // the corners where we have a scrollbar.
   nsRectCornerRadii radii;
@@ -4087,6 +4110,7 @@ void ScrollContainerFrame::BuildDisplayList(nsDisplayListBuilder* aBuilder,
     // layout viewport so that zoomed-in content can be seen under non-opaque
     // scrollbars, but content outside of it can't.
     clipRect = nsRect(aBuilder->ToReferenceFrame(this), compositionSize);
+    topLayerClipRect = clipRect;
     clipRect = clipRect.Intersect(
         ViewportUtils::LayoutToVisual(scrollPortClip, PresShell()));
 
@@ -4095,6 +4119,8 @@ void ScrollContainerFrame::BuildDisplayList(nsDisplayListBuilder* aBuilder,
     // to layout coordinates to match.
     if (aBuilder->IsRelativeToLayoutViewport()) {
       clipRect = ViewportUtils::VisualToLayout(clipRect, PresShell());
+      topLayerClipRect =
+          ViewportUtils::VisualToLayout(topLayerClipRect, PresShell());
     }
   }
 
@@ -4385,6 +4411,8 @@ void ScrollContainerFrame::BuildDisplayList(nsDisplayListBuilder* aBuilder,
 
   // Now display overlay scrollbars and the resizer, if we have one.
   AppendScrollPartsTo(aBuilder, set, createLayersForScrollbars, true);
+  AppendContentTopLayer(aBuilder, set, willBuildAsyncZoomContainer,
+                        topLayerClipRect);
 
   set.MoveTo(aLists);
 

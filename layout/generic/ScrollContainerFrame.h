@@ -1200,6 +1200,14 @@ class ScrollContainerFrame : public nsContainerFrame,
       AutoContainsBlendModeCapturer* aAsyncZoomBlendCapture,
       const nsRect& aAsyncZoomClipRect, const nsRectCornerRadii* aRadii);
 
+  // Append the content top layer on top of the root scrollbars. If
+  // aCreateAsyncZoom is true, wrap it in its own async zoom container clipped
+  // to aAsyncZoomClipRect.
+  void AppendContentTopLayer(nsDisplayListBuilder* aBuilder,
+                             nsDisplayListCollection& aSet,
+                             bool aCreateAsyncZoom,
+                             const nsRect& aAsyncZoomClipRect);
+
   void AppendScrollPartsTo(nsDisplayListBuilder* aBuilder,
                            const nsDisplayListSet& aLists, bool aCreateLayer,
                            bool aPositioned);
