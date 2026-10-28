@@ -145,14 +145,15 @@ struct APZCTreeManager::TreeBuildingState {
   // instead. Those deferred transforms are tracked here.
   DeferredTransformMap mPerspectiveTransformsDeferredToChildren;
 
-  // As we recurse down through the tree, this picks up the zoom animation id
-  // from a node in the layer tree, and propagates it downwards to the nearest
-  // APZC instance that is for an RCD node. Generally it will be set on the
-  // root node of the layers (sub-)tree, which may not be same as the RCD node
-  // for the subtree, and so we need this mechanism to ensure it gets propagated
-  // to the RCD's APZC instance. Once it is set on the APZC instance, the value
-  // is cleared back to Nothing().
-  Maybe<uint64_t> mZoomAnimationId;
+  // The zoom animation ids of the async zoom containers, keyed by
+  // (layers id, async zoom container id). The async zoom container id is the
+  // scroll id of the RCD-RSF, so after the tree walk, each RCD's APZC gets the
+  // ids of its async zoom containers. There can be more than one container,
+  // because the content top layer has its own container.
+  std::unordered_map<ScrollableLayerGuid, nsTArray<uint64_t>,
+                     ScrollableLayerGuid::HashIgnoringPresShellFn,
+                     ScrollableLayerGuid::EqualIgnoringPresShellFn>
+      mZoomAnimationIds;
 
   // See corresponding members of APZCTreeManager. These are the same thing, but
   // on the tree-walking state. They are populated while walking the tree in
@@ -743,6 +744,19 @@ std::vector<LayersId> APZCTreeManager::UpdateHitTestingTree(
   // We do not support tree structures where the root node has siblings.
   MOZ_ASSERT(!(mRootNode && mRootNode->GetPrevSibling()));
 
+  for (auto& [guid, mapData] : state.mApzcMap) {
+    AsyncPanZoomController* apzc = mapData.apzc;
+    if (!apzc->IsRootContent()) {
+      continue;
+    }
+    nsTArray<uint64_t> zoomAnimationIds;
+    auto it = state.mZoomAnimationIds.find(guid);
+    if (it != state.mZoomAnimationIds.end()) {
+      zoomAnimationIds = std::move(it->second);
+    }
+    apzc->SetZoomAnimationIds(std::move(zoomAnimationIds));
+  }
+
   {  // scope lock and update our mApzcMap before we destroy all the unused
     // APZC instances
     MutexAutoLock lock(mMapLock);
@@ -863,7 +877,8 @@ void APZCTreeManager::SampleForWebRender(const Maybe<VsyncId>& aVsyncId,
 
     wr::LayoutTransform zoomForMinimap =
         wr::ToLayoutTransform(gfx::Matrix4x4());
-    if (Maybe<uint64_t> zoomAnimationId = apzc->GetZoomAnimationId()) {
+    const nsTArray<uint64_t> zoomAnimationIds = apzc->GetZoomAnimationIds();
+    if (!zoomAnimationIds.IsEmpty()) {
       // for now we only support zooming on root content APZCs
       MOZ_ASSERT(apzc->IsRootContent());
 
@@ -874,19 +889,22 @@ void APZCTreeManager::SampleForWebRender(const Maybe<VsyncId>& aVsyncId,
           AsyncPanZoomController::eForCompositing,
           AsyncTransformComponents{AsyncTransformComponent::eVisual});
 
-      wr::WrTransformProperty zoomTransform = wr::ToWrTransformProperty(
-          *zoomAnimationId, LayoutDeviceToParentLayerMatrix4x4::Scaling(
-                                zoom.scale, zoom.scale, 1.0f) *
-                                AsyncTransformComponentMatrix::Translation(
-                                    asyncVisualTransform.mTranslation));
+      const auto zoomMatrix = LayoutDeviceToParentLayerMatrix4x4::Scaling(
+                                  zoom.scale, zoom.scale, 1.0f) *
+                              AsyncTransformComponentMatrix::Translation(
+                                  asyncVisualTransform.mTranslation);
+      for (const uint64_t zoomAnimationId : zoomAnimationIds) {
+        wr::WrTransformProperty zoomTransform =
+            wr::ToWrTransformProperty(zoomAnimationId, zoomMatrix);
 
-      // Store the zoom transform to be added to the minimap data so that we
-      // can take it into account correctly during minimap rendering.
-      zoomForMinimap = zoomTransform.value;
+        // Store the zoom transform to be added to the minimap data so that we
+        // can take it into account correctly during minimap rendering.
+        zoomForMinimap = zoomTransform.value;
 
-      transforms.AppendElement(zoomTransform);
-      aTxn.UpdateIsTransformAsyncZooming(*zoomAnimationId,
-                                         apzc->IsAsyncZooming());
+        transforms.AppendElement(zoomTransform);
+        aTxn.UpdateIsTransformAsyncZooming(zoomAnimationId,
+                                           apzc->IsAsyncZooming());
+      }
     }
 
     nsTArray<wr::SampledScrollOffset> sampledOffsets =
@@ -1270,7 +1288,13 @@ HitTestingTreeNode* APZCTreeManager::PrepareNodeForLayer(
   }
 
   if (Maybe<uint64_t> zoomAnimationId = aLayer.GetZoomAnimationId()) {
-    aState.mZoomAnimationId = zoomAnimationId;
+    if (Maybe<ScrollableLayerGuid::ViewID> zoomContainerId =
+            aLayer.GetAsyncZoomContainerId()) {
+      aState
+          .mZoomAnimationIds[ScrollableLayerGuid(aLayersId, 0,
+                                                 *zoomContainerId)]
+          .AppendElement(*zoomAnimationId);
+    }
   }
 
   RefPtr<HitTestingTreeNode> node = nullptr;
@@ -1380,11 +1404,6 @@ HitTestingTreeNode* APZCTreeManager::PrepareNodeForLayer(
       aState.mNodesToDestroy.RemoveElement(node);
       node->SetPrevSibling(nullptr);
       node->SetLastChild(nullptr);
-    }
-
-    if (aMetrics.IsRootContent()) {
-      apzc->SetZoomAnimationId(aState.mZoomAnimationId);
-      aState.mZoomAnimationId = Nothing();
     }
 
     APZCTM_LOG("Using APZC %p for layer %p with identifiers %" PRIx64
