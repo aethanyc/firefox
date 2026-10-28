@@ -5242,7 +5242,7 @@ AsyncPanZoomController::GetSampledScrollOffsets() const {
   RecursiveMutexAutoLock lock(mRecursiveMutex);
 
   const AsyncTransformComponents asyncTransformComponents =
-      GetZoomAnimationId()
+      HasZoomAnimationId()
           ? AsyncTransformComponents{AsyncTransformComponent::eLayout}
           : LayoutAndVisual;
 
@@ -5717,7 +5717,7 @@ void AsyncPanZoomController::NotifyMainThreadTransaction(
       isDefault || Metrics().IsRootContent() != aLayerMetrics.IsRootContent()) {
     if (Metrics().IsRootContent() && !aLayerMetrics.IsRootContent()) {
       // We only support zooming on root content APZCs
-      SetZoomAnimationId(Nothing());
+      SetZoomAnimationIds({});
     }
 
     // Initialize our internal state to something sane when the content
@@ -7249,15 +7249,20 @@ AsyncPanZoomController::MaybeAdjustDestinationForScrollSnapping(
   return Nothing();
 }
 
-void AsyncPanZoomController::SetZoomAnimationId(
-    const Maybe<uint64_t>& aZoomAnimationId) {
+void AsyncPanZoomController::SetZoomAnimationIds(
+    nsTArray<uint64_t>&& aZoomAnimationIds) {
   RecursiveMutexAutoLock lock(mRecursiveMutex);
-  mZoomAnimationId = aZoomAnimationId;
+  mZoomAnimationIds = std::move(aZoomAnimationIds);
 }
 
-Maybe<uint64_t> AsyncPanZoomController::GetZoomAnimationId() const {
+nsTArray<uint64_t> AsyncPanZoomController::GetZoomAnimationIds() const {
   RecursiveMutexAutoLock lock(mRecursiveMutex);
-  return mZoomAnimationId;
+  return mZoomAnimationIds.Clone();
+}
+
+bool AsyncPanZoomController::HasZoomAnimationId() const {
+  RecursiveMutexAutoLock lock(mRecursiveMutex);
+  return !mZoomAnimationIds.IsEmpty();
 }
 
 CSSPoint AsyncPanZoomController::MaybeFillOutOverscrollGutter(
