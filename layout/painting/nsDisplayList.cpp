@@ -693,9 +693,11 @@ nsRect nsDisplayListBuilder::OutOfFlowDisplayData::ComputeVisibleRectForFrame(
     // fixed-position element we paint to the visual viewport. (In general
     // the fixed-position element can be as large as the layout viewport,
     // which at a high zoom level can cause us to paint too large of an
-    // area.)
+    // area.) Top layer frames cover the root scrollbars and scrollbar-gutter,
+    // which are outside the visual viewport, so don't restrict them to it.
     PresShell* presShell = aFrame->PresShell();
-    if (presShell->IsVisualViewportSizeSet()) {
+    if (presShell->IsVisualViewportSizeSet() &&
+        aFrame->StyleDisplay()->mTopLayer == StyleTopLayer::None) {
       ScrollContainerFrame* rootScrollContainerFrame =
           presShell->GetRootScrollContainerFrame();
       // The visual viewport offset is relative to the root scroll port, but the
