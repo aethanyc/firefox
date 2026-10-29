@@ -696,22 +696,34 @@ nsRect nsDisplayListBuilder::OutOfFlowDisplayData::ComputeVisibleRectForFrame(
     // area.)
     PresShell* presShell = aFrame->PresShell();
     if (presShell->IsVisualViewportSizeSet()) {
+      ScrollContainerFrame* rootScrollContainerFrame =
+          presShell->GetRootScrollContainerFrame();
+      // The visual viewport offset is relative to the root scroll port, but the
+      // rect must be relative to aFrame's parent (i.e. the viewport frame). The
+      // scroll port might not start at (0,0) when there is a scrollbar-gutter
+      // or a scrollbar on the left.
+      const nsPoint scrollPortOrigin =
+          rootScrollContainerFrame
+              ? rootScrollContainerFrame->GetScrollPortRect().TopLeft()
+              : nsPoint();
       dirtyRectRelativeToDirtyFrame =
-          nsRect(presShell->GetVisualViewportOffsetRelativeToLayoutViewport(),
+          nsRect(presShell->GetVisualViewportOffsetRelativeToLayoutViewport() +
+                     scrollPortOrigin,
                  presShell->GetVisualViewportSize());
       // But if we have a displayport, expand it to the displayport, so
       // that async-scrolling the visual viewport within the layout viewport
       // will not checkerboard.
-      if (nsIFrame* rootScrollContainerFrame =
-              presShell->GetRootScrollContainerFrame()) {
+      if (rootScrollContainerFrame) {
         nsRect displayport;
-        // Note that the displayport here is already in the right coordinate
-        // space: it's relative to the scroll port (= layout viewport), but
-        // covers the visual viewport with some margins around it, which is
-        // exactly what we want.
+        // Note that the displayport here is in the right coordinate space:
+        // it's relative to the root scroll container frame (= the origin of
+        // the viewport frame), and covers the visual viewport with some
+        // margins around it, which is exactly what we want.
         if (DisplayPortUtils::GetDisplayPort(
                 rootScrollContainerFrame->GetContent(), &displayport,
-                DisplayPortOptions().With(ContentGeometryType::Fixed))) {
+                DisplayPortOptions()
+                    .With(DisplayportRelativeTo::ScrollFrame)
+                    .With(ContentGeometryType::Fixed))) {
           dirtyRectRelativeToDirtyFrame = displayport;
         }
       }
