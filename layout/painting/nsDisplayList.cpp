@@ -696,9 +696,11 @@ nsRect nsDisplayListBuilder::OutOfFlowDisplayData::ComputeVisibleRectForFrame(
     // async-scrolling the visual viewport within the layout viewport will not
     // checkerboard. (In general the fixed-position element can be as large as
     // the layout viewport, which at a high zoom level can cause us to paint too
-    // large of an area.)
+    // large of an area.) Top layer frames cover the root scrollbars and
+    // scrollbar-gutter, so don't restrict them.
     PresShell* presShell = aFrame->PresShell();
-    if (presShell->IsVisualViewportSizeSet()) {
+    if (presShell->IsVisualViewportSizeSet() &&
+        aFrame->StyleDisplay()->mTopLayer == StyleTopLayer::None) {
       const ScrollContainerFrame* rootScrollContainerFrame =
           presShell->GetRootScrollContainerFrame();
       MOZ_ASSERT(rootScrollContainerFrame,
