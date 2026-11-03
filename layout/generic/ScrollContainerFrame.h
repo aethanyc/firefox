@@ -1187,7 +1187,9 @@ class ScrollContainerFrame : public nsContainerFrame,
 
   // Add display items for the top-layer (which includes things like
   // the fullscreen element, its backdrop, and text selection carets)
-  // to |aLists|.
+  // to |aTopLayersAboveScrollbars|. If the root is captured by a view
+  // transition, the content top layer goes to |aLists| instead, so that it is
+  // in the capture.
   // This is a no-op for scroll frames other than the viewport's
   // root scroll frame.
   // This should be called with an nsDisplayListSet that will be
@@ -1198,7 +1200,19 @@ class ScrollContainerFrame : public nsContainerFrame,
       nsDisplayListBuilder*, nsDisplayListCollection&, bool aCreateAsyncZoom,
       bool aCapturedByViewTransition,
       AutoContainsBlendModeCapturer* aAsyncZoomBlendCapture,
-      const nsRect& aAsyncZoomClipRect, const nsRectCornerRadii* aRadii);
+      const nsRect& aAsyncZoomClipRect, const nsRectCornerRadii* aRadii,
+      nsDisplayList& aTopLayersAboveScrollbars);
+
+  // Append aTopLayers from MaybeCreateTopLayerAndWrapRootItems() on top of the
+  // root scrollbars, so that the top layer covers the scrollbars and
+  // scrollbar-gutter. This must be called after AppendScrollPartsTo(..., true).
+  // If aCreateAsyncZoom is true, wrap aTopLayers in its own async zoom
+  // container clipped to aAsyncZoomClipRect.
+  void AppendTopLayersAboveScrollbars(nsDisplayListBuilder* aBuilder,
+                                      nsDisplayListCollection& aSet,
+                                      nsDisplayList& aTopLayers,
+                                      bool aCreateAsyncZoom,
+                                      const nsRect& aAsyncZoomClipRect);
 
   void AppendScrollPartsTo(nsDisplayListBuilder* aBuilder,
                            const nsDisplayListSet& aLists, bool aCreateLayer,
