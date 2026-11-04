@@ -1,0 +1,19 @@
+<!doctype html>
+<html class="reftest-wait">
+<meta charset="utf-8">
+<title>Green viewport with white strips at both edges</title>
+<style>
+  html {
+    background: green;
+    border-left: 8px solid white;
+    border-right: 8px solid white;
+    box-sizing: border-box;
+    height: 100%;
+  }
+</style>
+<script src="/resources/testdriver.js"></script>
+<script src="/resources/testdriver-vendor.js"></script>
+<script>
+  test_driver.bless("fullscreen", () => document.documentElement.requestFullscreen())
+    .then(() => document.documentElement.classList.remove("reftest-wait"));
+</script>

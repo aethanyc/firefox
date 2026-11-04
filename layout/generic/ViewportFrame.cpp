@@ -344,12 +344,36 @@ nscoord ViewportFrame::IntrinsicISize(const IntrinsicSizeInput& aInput,
              : mFrames.FirstChild()->IntrinsicISize(aInput, aType);
 }
 
+bool ViewportFrame::ShouldCoverScrollbars(const nsIFrame* aKidFrame) {
+  if (aKidFrame->StyleDisplay()->mTopLayer == StyleTopLayer::None) {
+    return false;
+  }
+
+  // FIXME(Bug 1874091): All the fixed-pos top-layer frames should cover the
+  // scrollbar and scrollbar gutter. The code below fixes only the fullscreen
+  // element and its ::backdrop.
+
+  // Get the originating element if aKidFrame is a ::backdrop.
+  const nsIContent* content = aKidFrame->GetContent();
+  const dom::Element* element =
+      content->IsGeneratedContentContainerForBackdrop()
+          ? content->GetParentElement()
+          : dom::Element::FromNode(content);
+  return element && element->State().HasState(dom::ElementState::FULLSCREEN);
+}
+
 nsRect ViewportFrame::GetContainingBlockAdjustedForScrollbars(
-    const ReflowInput& aReflowInput) const {
+    const ReflowInput& aReflowInput, const nsIFrame* aKidFrame) const {
+  MOZ_ASSERT(aReflowInput.mFrame == this,
+             "Caller should pass ViewportFrame's ReflowInput!");
+
   const WritingMode wm = aReflowInput.GetWritingMode();
 
   LogicalSize computedSize = aReflowInput.ComputedSize();
   const nsPoint& origin = [&]() {
+    if (ShouldCoverScrollbars(aKidFrame)) {
+      return nsPoint(0, 0);
+    }
     // Get our prinicpal child frame and see if we're scrollable
     nsIFrame* kidFrame = mFrames.FirstChild();
     if (ScrollContainerFrame* scrollContainerFrame = do_QueryFrame(kidFrame)) {

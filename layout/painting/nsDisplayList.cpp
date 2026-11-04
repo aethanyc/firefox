@@ -699,7 +699,8 @@ nsRect nsDisplayListBuilder::OutOfFlowDisplayData::ComputeVisibleRectForFrame(
     // the layout viewport, which at a high zoom level can cause us to paint too
     // large of an area.)
     PresShell* presShell = aFrame->PresShell();
-    if (presShell->IsVisualViewportSizeSet()) {
+    if (presShell->IsVisualViewportSizeSet() &&
+        !ViewportFrame::ShouldCoverScrollbars(aFrame)) {
       const ScrollContainerFrame* rootScrollContainerFrame =
           presShell->GetRootScrollContainerFrame();
       MOZ_ASSERT(rootScrollContainerFrame,
