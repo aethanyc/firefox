@@ -12,6 +12,7 @@
 #include "PresShell.h"
 #include "mozilla/OverflowChangedTracker.h"
 #include "mozilla/ScrollContainerFrame.h"
+#include "mozilla/ViewportFrame.h"
 #include "mozilla/layers/LayersTypes.h"
 #include "nsIFrame.h"
 #include "nsIFrameInlines.h"
@@ -21,7 +22,11 @@ namespace mozilla {
 
 StickyScrollContainer::StickyScrollContainer(
     ScrollContainerFrame* aScrollContainerFrame)
-    : mScrollContainerFrame(aScrollContainerFrame) {}
+    : mOwnerFrame(aScrollContainerFrame),
+      mScrollContainerFrame(aScrollContainerFrame) {}
+
+StickyScrollContainer::StickyScrollContainer(ViewportFrame* aViewportFrame)
+    : mOwnerFrame(aViewportFrame), mScrollContainerFrame(nullptr) {}
 
 static ScrollContainerFrame* GetScrollContainerForStickyFrame(
     const nsIFrame* aFrame) {
@@ -51,6 +56,47 @@ StickyScrollContainer* StickyScrollContainer::GetForFrame(
       GetScrollContainerForStickyFrame(aFrame);
   return scrollContainerFrame ? scrollContainerFrame->GetStickyContainer()
                               : nullptr;
+}
+
+static ViewportFrame* GetViewportForFixedPosStickyFrame(
+    const nsIFrame* aFrame) {
+  for (const nsIFrame* f = aFrame; f; f = f->GetParent()) {
+    nsContainerFrame* parent = f->GetParent();
+    if (parent && parent->IsViewportFrame()) {
+      return f->HasAnyStateBits(NS_FRAME_OUT_OF_FLOW)
+                 ? static_cast<ViewportFrame*>(parent)
+                 : nullptr;
+    }
+  }
+  return nullptr;
+}
+
+// static
+StickyScrollContainer* StickyScrollContainer::GetOrCreateForPositioning(
+    nsIFrame* aFrame) {
+  if (ScrollContainerFrame* scrollContainerFrame =
+          GetScrollContainerForStickyFrame(aFrame)) {
+    return &scrollContainerFrame->EnsureStickyContainer();
+  }
+  if (ViewportFrame* viewportFrame =
+          GetViewportForFixedPosStickyFrame(aFrame)) {
+    return &viewportFrame->EnsureStickyContainer();
+  }
+  return nullptr;
+}
+
+// static
+StickyScrollContainer* StickyScrollContainer::GetForPositioning(
+    const nsIFrame* aFrame) {
+  if (ScrollContainerFrame* scrollContainerFrame =
+          GetScrollContainerForStickyFrame(aFrame)) {
+    return scrollContainerFrame->GetStickyContainer();
+  }
+  if (ViewportFrame* viewportFrame =
+          GetViewportForFixedPosStickyFrame(aFrame)) {
+    return viewportFrame->GetStickyContainer();
+  }
+  return nullptr;
 }
 
 void StickyScrollContainer::AddFrame(nsIFrame* aFrame) {
@@ -85,28 +131,24 @@ static nsSize GetScrollContainerSize(
   return aScrollContainer->GetScrolledFrameSize();
 }
 
-// static
-void StickyScrollContainer::ComputeStickyOffsets(nsIFrame* aFrame) {
-  ScrollContainerFrame* scrollContainerFrame =
-      GetScrollContainerForStickyFrame(aFrame);
+nsSize StickyScrollContainer::GetStickyViewSize() const {
+  return mScrollContainerFrame ? GetScrollContainerSize(mScrollContainerFrame)
+                               : mFixedPosCBRect.Size();
+}
 
-  if (!scrollContainerFrame) {
-    // Bail.
-    return;
-  }
-
-  nsSize scrollContainerSize = GetScrollContainerSize(scrollContainerFrame);
+void StickyScrollContainer::ComputeStickyOffsets(nsIFrame* aFrame) const {
+  const nsSize stickyViewSize = GetStickyViewSize();
   nsMargin computedOffsets;
   const nsStylePosition* position = aFrame->StylePosition();
 
   computedOffsets.left =
-      ComputeStickySideOffset(eSideLeft, *position, scrollContainerSize.width);
+      ComputeStickySideOffset(eSideLeft, *position, stickyViewSize.width);
   computedOffsets.right =
-      ComputeStickySideOffset(eSideRight, *position, scrollContainerSize.width);
+      ComputeStickySideOffset(eSideRight, *position, stickyViewSize.width);
   computedOffsets.top =
-      ComputeStickySideOffset(eSideTop, *position, scrollContainerSize.height);
-  computedOffsets.bottom = ComputeStickySideOffset(eSideBottom, *position,
-                                                   scrollContainerSize.height);
+      ComputeStickySideOffset(eSideTop, *position, stickyViewSize.height);
+  computedOffsets.bottom =
+      ComputeStickySideOffset(eSideBottom, *position, stickyViewSize.height);
 
   aFrame->SetOrUpdateDeletableProperty(nsIFrame::ComputedOffsetProperty(),
                                        computedOffsets);
@@ -138,9 +180,11 @@ StickyScrollContainer::StickyLimits StickyScrollContainer::ComputeStickyLimits(
     return limits;
   }
 
-  nsIFrame* scrolledFrame = mScrollContainerFrame->GetScrolledFrame();
+  nsIFrame* scrolledFrame = mScrollContainerFrame
+                                ? mScrollContainerFrame->GetScrolledFrame()
+                                : nullptr;
   nsIFrame* cbFrame = aFrame->GetContainingBlock();
-  NS_ASSERTION(cbFrame == scrolledFrame ||
+  NS_ASSERTION(!scrolledFrame || cbFrame == scrolledFrame ||
                    nsLayoutUtils::IsProperAncestorFrame(scrolledFrame, cbFrame),
                "Scroll frame should be an ancestor of the containing block");
 
@@ -190,9 +234,16 @@ StickyScrollContainer::StickyLimits StickyScrollContainer::ComputeStickyLimits(
   // upper-left corner of aFrame and continuations.
   limits.mContain.Deflate(nsMargin(0, rect.width, rect.height, 0));
 
-  nsMargin sfPadding = scrolledFrame->GetUsedPadding();
-  nsPoint sfOffset = aFrame->GetParent()->GetOffsetTo(scrolledFrame);
-  nsSize sfSize = GetScrollContainerSize(mScrollContainerFrame);
+  nsMargin sfPadding;
+  nsPoint sfOffset;
+  if (scrolledFrame) {
+    sfPadding = scrolledFrame->GetUsedPadding();
+    sfOffset = aFrame->GetParent()->GetOffsetTo(scrolledFrame);
+  } else {
+    sfOffset = aFrame->GetParent()->GetOffsetTo(mOwnerFrame) -
+               mFixedPosCBRect.TopLeft();
+  }
+  nsSize sfSize = GetStickyViewSize();
   StyleDirection direction = cbFrame->StyleVisibility()->mDirection;
   nsMargin effectiveOffsets = *computedOffsets;
 
@@ -444,13 +495,8 @@ void StickyScrollContainer::PositionContinuations(nsIFrame* aFrame) {
 
 void StickyScrollContainer::UpdatePositions(nsPoint aScrollPosition,
                                             nsIFrame* aSubtreeRoot) {
-#ifdef DEBUG
-  {
-    nsIFrame* scrollFrameAsFrame = do_QueryFrame(mScrollContainerFrame);
-    NS_ASSERTION(!aSubtreeRoot || aSubtreeRoot == scrollFrameAsFrame,
-                 "If reflowing, should be reflowing the scroll frame");
-  }
-#endif
+  NS_ASSERTION(!aSubtreeRoot || aSubtreeRoot == mOwnerFrame,
+               "If reflowing, should be reflowing our owner frame");
   mScrollPosition = aScrollPosition;
 
   OverflowChangedTracker oct;
@@ -479,7 +525,7 @@ void StickyScrollContainer::UpdatePositions(nsPoint aScrollPosition,
 }
 
 void StickyScrollContainer::MarkFramesForReflow() {
-  PresShell* ps = mScrollContainerFrame->PresShell();
+  PresShell* ps = mOwnerFrame->PresShell();
   for (nsIFrame* frame : mFrames.IterFromShallowest()) {
     ps->FrameNeedsReflow(frame, IntrinsicDirty::None, NS_FRAME_IS_DIRTY);
   }

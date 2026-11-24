@@ -947,9 +947,9 @@ static bool RecomputePosition(nsIFrame* aFrame) {
       nsIFrame* firstContinuation =
           nsLayoutUtils::FirstContinuationOrIBSplitSibling(aFrame);
 
-      StickyScrollContainer::ComputeStickyOffsets(firstContinuation);
-      auto* ssc = StickyScrollContainer::GetOrCreateForFrame(firstContinuation);
-      if (ssc) {
+      if (auto* ssc = StickyScrollContainer::GetOrCreateForPositioning(
+              firstContinuation)) {
+        ssc->ComputeStickyOffsets(firstContinuation);
         ssc->PositionContinuations(firstContinuation);
       }
     } else {

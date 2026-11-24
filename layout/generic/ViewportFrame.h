@@ -10,6 +10,7 @@
 #ifndef mozilla_ViewportFrame_h
 #define mozilla_ViewportFrame_h
 
+#include "mozilla/UniquePtr.h"
 #include "nsContainerFrame.h"
 
 class nsPresContext;
@@ -18,6 +19,7 @@ namespace mozilla {
 
 class nsDisplayWrapList;
 class ServoRestyleState;
+class StickyScrollContainer;
 
 /**
  * ViewportFrame is the parent of a single child -- the root canvas frame or a
@@ -33,7 +35,7 @@ class ViewportFrame : public nsContainerFrame {
   explicit ViewportFrame(ComputedStyle* aStyle, nsPresContext* aPresContext)
       : ViewportFrame(aStyle, aPresContext, kClassID) {}
 
-  virtual ~ViewportFrame() = default;  // useful for debugging
+  virtual ~ViewportFrame();  // useful for debugging
 
   void Init(nsIContent* aContent, nsContainerFrame* aParent,
             nsIFrame* aPrevInFlow) override;
@@ -80,6 +82,22 @@ class ViewportFrame : public nsContainerFrame {
       const ReflowInput& aReflowInput, const nsIFrame* aKidFrame) const;
 
   /**
+   * Same as above, but always excludes scrollbars and scrollbar-gutter.
+   */
+  nsRect GetContainingBlockAdjustedForScrollbars(
+      const ReflowInput& aReflowInput) const;
+
+  /**
+   * The StickyScrollContainer for sticky frames in our fixed-pos subtrees that
+   * have no scroll container in between. See
+   * StickyScrollContainer::GetOrCreateForPositioning().
+   */
+  StickyScrollContainer* GetStickyContainer() const {
+    return mStickyContainer.get();
+  }
+  StickyScrollContainer& EnsureStickyContainer();
+
+  /**
    * Return our single anonymous box child.
    */
   void AppendDirectlyOwnedAnonBoxes(nsTArray<OwnedAnonBox>& aResult) override;
@@ -93,12 +111,14 @@ class ViewportFrame : public nsContainerFrame {
 #endif
 
  protected:
-  ViewportFrame(ComputedStyle* aStyle, nsPresContext* aPresContext, ClassID aID)
-      : nsContainerFrame(aStyle, aPresContext, aID) {}
+  ViewportFrame(ComputedStyle* aStyle, nsPresContext* aPresContext,
+                ClassID aID);
 
  private:
   nsDisplayWrapList* MaybeWrapTopLayerList(nsDisplayListBuilder*,
                                            uint16_t aIndex, nsDisplayList&);
+
+  UniquePtr<StickyScrollContainer> mStickyContainer;
 };
 
 }  // namespace mozilla

@@ -975,7 +975,7 @@ void nsIFrame::HandlePrimaryFrameStyleChange(ComputedStyle* aOldStyle) {
               : disp->mPosition == StylePositionProperty::Sticky;
   if (handleStickyChange &&
       !HasAnyStateBits(NS_FRAME_IS_NONDISPLAY | NS_FRAME_SVG_LAYOUT)) {
-    if (auto* ssc = StickyScrollContainer::GetOrCreateForFrame(this)) {
+    if (auto* ssc = StickyScrollContainer::GetOrCreateForPositioning(this)) {
       if (IsStickyPositioned()) {
         ssc->AddFrame(this);
       } else {
@@ -1000,7 +1000,7 @@ void nsIFrame::Destroy(DestroyContext& aContext) {
       this, SVGObserverUtils::InvalidationFlag::FrameBeingDestroyed);
 
   if (IsStickyPositioned()) {
-    if (auto* ssc = StickyScrollContainer::GetForFrame(this)) {
+    if (auto* ssc = StickyScrollContainer::GetForPositioning(this)) {
       ssc->RemoveFrame(this);
     }
   }

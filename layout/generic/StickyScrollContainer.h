@@ -26,6 +26,7 @@ enum class ScrollDirection : uint8_t;
 namespace mozilla {
 
 class ScrollContainerFrame;
+class ViewportFrame;
 
 class StickyScrollContainer final {
  public:
@@ -44,15 +45,36 @@ class StickyScrollContainer final {
    */
   static StickyScrollContainer* GetForFrame(const nsIFrame*);
 
+  /**
+   * As GetOrCreateForFrame and GetForFrame, but if the given frame has no
+   * ancestor scroll container and is inside a fixed-pos subtree of the
+   * viewport, return the ViewportFrame's StickyScrollContainer. Use this
+   * flavor to register and position sticky frames.
+   */
+  static StickyScrollContainer* GetOrCreateForPositioning(nsIFrame*);
+  static StickyScrollContainer* GetForPositioning(const nsIFrame*);
+
   void AddFrame(nsIFrame* aFrame);
   void RemoveFrame(nsIFrame* aFrame) { mFrames.Remove(aFrame); }
 
+  /**
+   * Returns null if a ViewportFrame owns this StickyScrollContainer.
+   * GetOrCreateForFrame and GetForFrame never return such a container.
+   */
   ScrollContainerFrame* ScrollContainer() const {
     return mScrollContainerFrame;
   }
 
   // Compute the offsets for a sticky position element
-  static void ComputeStickyOffsets(nsIFrame* aFrame);
+  void ComputeStickyOffsets(nsIFrame* aFrame) const;
+
+  /**
+   * Set the fixed-pos containing block of the ViewportFrame that owns us,
+   * relative to that ViewportFrame.
+   */
+  void SetFixedPosContainingBlock(const nsRect& aRect) {
+    mFixedPosCBRect = aRect;
+  }
 
   /**
    * Compute the position of a sticky positioned frame, based on information
@@ -153,6 +175,7 @@ class StickyScrollContainer final {
   bool ShouldFlattenAway() const { return mShouldFlatten; }
 
   explicit StickyScrollContainer(ScrollContainerFrame* aScrollContainerFrame);
+  explicit StickyScrollContainer(ViewportFrame* aViewportFrame);
 
  private:
   /**
@@ -184,7 +207,14 @@ class StickyScrollContainer final {
 
   nsPoint DoComputePosition(nsIFrame* aFrame, StickyLimitSpace aSpace) const;
 
+  // The size of the rectangle that our sticky frames stick to.
+  nsSize GetStickyViewSize() const;
+
+  // mScrollContainerFrame, or the ViewportFrame that owns us.
+  nsIFrame* const mOwnerFrame;
   ScrollContainerFrame* const mScrollContainerFrame;
+  // Used only if a ViewportFrame owns us. See SetFixedPosContainingBlock().
+  nsRect mFixedPosCBRect;
   DepthOrderedFrameList mFrames;
   nsPoint mScrollPosition;
   bool mShouldFlatten = false;

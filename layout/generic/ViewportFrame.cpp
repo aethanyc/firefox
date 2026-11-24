@@ -10,6 +10,7 @@
 #include "mozilla/ViewportFrame.h"
 
 #include "MobileViewportManager.h"
+#include "StickyScrollContainer.h"
 #include "mozilla/AbsoluteContainingBlock.h"
 #include "mozilla/ComputedStyleInlines.h"
 #include "mozilla/DisplayPortUtils.h"
@@ -51,6 +52,19 @@ NS_IMPL_FRAMEARENA_HELPERS(ViewportFrame)
 NS_QUERYFRAME_HEAD(ViewportFrame)
   NS_QUERYFRAME_ENTRY(ViewportFrame)
 NS_QUERYFRAME_TAIL_INHERITING(nsContainerFrame)
+
+ViewportFrame::ViewportFrame(ComputedStyle* aStyle, nsPresContext* aPresContext,
+                             ClassID aID)
+    : nsContainerFrame(aStyle, aPresContext, aID) {}
+
+ViewportFrame::~ViewportFrame() = default;
+
+StickyScrollContainer& ViewportFrame::EnsureStickyContainer() {
+  if (!mStickyContainer) {
+    mStickyContainer = std::make_unique<StickyScrollContainer>(this);
+  }
+  return *mStickyContainer;
+}
 
 void ViewportFrame::Init(nsIContent* aContent, nsContainerFrame* aParent,
                          nsIFrame* aPrevInFlow) {
@@ -374,30 +388,38 @@ nsRect ViewportFrame::GetContainingBlockAdjustedForScrollbars(
   MOZ_ASSERT(aKidFrame->GetParent() == this,
              "aKidFrame should be ViewportFrame's child!");
 
+  if (ShouldCoverScrollbars(aKidFrame)) {
+    nsRect rect(nsPoint(), aReflowInput.ComputedPhysicalSize());
+    rect.SizeTo(AdjustViewportSizeForFixedPosition(rect));
+    return rect;
+  }
+  return GetContainingBlockAdjustedForScrollbars(aReflowInput);
+}
+
+nsRect ViewportFrame::GetContainingBlockAdjustedForScrollbars(
+    const ReflowInput& aReflowInput) const {
+  MOZ_ASSERT(aReflowInput.mFrame == this,
+             "Caller should pass ViewportFrame's ReflowInput!");
+
   const WritingMode wm = aReflowInput.GetWritingMode();
 
   LogicalSize computedSize = aReflowInput.ComputedSize();
-  const nsPoint& origin = [&]() {
-    if (ShouldCoverScrollbars(aKidFrame)) {
-      return nsPoint();
-    }
-    // Get our prinicpal child frame and see if we're scrollable
-    nsIFrame* kidFrame = mFrames.FirstChild();
-    if (ScrollContainerFrame* scrollContainerFrame = do_QueryFrame(kidFrame)) {
-      // Note: In ReflowInput::CalculateHypotheticalPosition(), we exclude the
-      // scrollbar or scrollbar-gutter area when computing the offset to
-      // ViewportFrame. Ensure the code there remains in sync with the logic
-      // here.
-      LogicalMargin scrollbars(wm,
-                               scrollContainerFrame->GetActualScrollbarSizes());
-      computedSize.ISize(wm) =
-          std::max(0, aReflowInput.ComputedISize() - scrollbars.IStartEnd(wm));
-      computedSize.BSize(wm) =
-          std::max(0, aReflowInput.ComputedBSize() - scrollbars.BStartEnd(wm));
-      return nsPoint(scrollbars.Left(wm), scrollbars.Top(wm));
-    }
-    return nsPoint();
-  }();
+  nsPoint origin;
+  // Get our prinicpal child frame and see if we're scrollable
+  nsIFrame* kidFrame = mFrames.FirstChild();
+  if (ScrollContainerFrame* scrollContainerFrame = do_QueryFrame(kidFrame)) {
+    // Note: In ReflowInput::CalculateHypotheticalPosition(), we exclude the
+    // scrollbar or scrollbar-gutter area when computing the offset to
+    // ViewportFrame. Ensure the code there remains in sync with the logic
+    // here.
+    LogicalMargin scrollbars(wm,
+                             scrollContainerFrame->GetActualScrollbarSizes());
+    computedSize.ISize(wm) =
+        std::max(0, aReflowInput.ComputedISize() - scrollbars.IStartEnd(wm));
+    computedSize.BSize(wm) =
+        std::max(0, aReflowInput.ComputedBSize() - scrollbars.BStartEnd(wm));
+    origin = nsPoint(scrollbars.Left(wm), scrollbars.Top(wm));
+  }
 
   nsRect rect(origin, computedSize.GetPhysicalSize(wm));
   rect.SizeTo(AdjustViewportSizeForFixedPosition(rect));
@@ -506,6 +528,12 @@ void ViewportFrame::Reflow(nsPresContext* aPresContext,
                                          absposStatus, cb, flags,
                                          /* aOverflowAreas = */ nullptr);
     aStatus.MergeCompletionStatusFrom(absposStatus);
+
+    if (mStickyContainer) {
+      mStickyContainer->SetFixedPosContainingBlock(
+          GetContainingBlockAdjustedForScrollbars(reflowInput));
+      mStickyContainer->UpdatePositions(nsPoint(), this);
+    }
   }
 
   if (mFrames.NotEmpty()) {
