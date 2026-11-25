@@ -889,6 +889,18 @@ AnchorPositioningUtils::GetNearestScrollFrame(const nsIFrame* aFrame) {
   return {nullptr, {}};
 }
 
+// Returns true if aFrame's rect in aContainingBlock's coordinate space must be
+// mapped through transforms, i.e. aFrame or one of its ancestors below
+// aContainingBlock is transformed. aContainingBlock's own transform is not
+// considered, because it applies to the positioned frame too.
+static bool FollowsTransforms(const nsIFrame* aFrame,
+                              const nsIFrame* aContainingBlock) {
+  return StaticPrefs::
+             layout_css_anchor_positioning_follows_transforms_enabled() &&
+         nsLayoutUtils::IsProperAncestorFrame(aContainingBlock, aFrame) &&
+         nsLayoutUtils::IsTransformed(aFrame, aContainingBlock);
+}
+
 nsPoint AnchorPositioningUtils::GetScrollOffsetFor(
     PhysicalAxes aAxes, const nsIFrame* aPositioned,
     const AnchorPosDefaultAnchorCache& aDefaultAnchorCache) {
@@ -902,7 +914,23 @@ nsPoint AnchorPositioningUtils::GetScrollOffsetFor(
   // scroll offset is how far the anchor has since scrolled relative to the
   // absolute containing block.
   const auto* absCB = aPositioned->GetParent();
-  const nsPoint offset = anchor->GetScrollOffsetTo(absCB);
+  const nsPoint offset = [&]() {
+    if (!FollowsTransforms(anchor, absCB)) {
+      return anchor->GetScrollOffsetTo(absCB);
+    }
+    // Scrolling only translates the anchor rect in the absolute containing
+    // block's space without changing its size, so the difference between the
+    // top-left corners of the scroll-ignoring rect and the actual rect is the
+    // scroll offset with transforms considered. Under perspective, scrolling
+    // can change the size, so this is an approximation.
+    const nsRect rect = anchor->GetRectRelativeToSelf();
+    const nsRect ignoringScroll = nsLayoutUtils::TransformFrameRectToAncestor(
+        anchor, rect, absCB, nullptr, nullptr,
+        TransformMatrixFlag::IgnoreScrolling);
+    const nsRect actual =
+        nsLayoutUtils::TransformFrameRectToAncestor(anchor, rect, absCB);
+    return ignoringScroll.TopLeft() - actual.TopLeft();
+  }();
   return nsPoint(aAxes.contains(PhysicalAxis::Horizontal) ? offset.x : 0,
                  aAxes.contains(PhysicalAxis::Vertical) ? offset.y : 0);
 }
@@ -1462,11 +1490,8 @@ auto AnchorPositioningUtils::GetCombinedFragmentRects(
 
   bool isPaginated = aFrame->PresContext()->IsPaginated();
 
-  const bool applyTransform =
-      StaticPrefs::layout_css_anchor_positioning_follows_transforms_enabled() &&
-      aApplyTransform == ApplyTransform::Yes &&
-      nsLayoutUtils::IsProperAncestorFrame(aContainingBlock, aFrame) &&
-      nsLayoutUtils::IsTransformed(aFrame, aContainingBlock);
+  const bool applyTransform = aApplyTransform == ApplyTransform::Yes &&
+                              FollowsTransforms(aFrame, aContainingBlock);
 
   // Lazy getter for aFrame's page-frame ancestor, if any.
   Maybe<const nsIFrame*> maybePageFrame;
